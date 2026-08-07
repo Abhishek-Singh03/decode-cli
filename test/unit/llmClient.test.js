@@ -91,6 +91,45 @@ describe('llmClient', () => {
     expect(fetchImpl._url).toBe('http://127.0.0.1:9999/v1/chat/completions');
   });
 
+  it('constructs the correct Groq endpoint — /openai/v1/chat/completions (404 regression)', async () => {
+    saveConnection({ llmProvider: 'groq', llmApiKey: 'gsk-test' }, { cwd: tmp });
+    const fetchImpl = stubFetch({ json: () => ({ choices: [{ message: { content: 'hi' } }] }) });
+
+    const result = await generateSummary('summarize', { cwd: tmp, fetchImpl });
+
+    expect(result).toBe('hi');
+    // The final URL must include the /openai segment — https://api.groq.com/v1/... 404s.
+    expect(fetchImpl._url).toBe('https://api.groq.com/openai/v1/chat/completions');
+    expect(fetchImpl._options.headers.authorization).toBe('Bearer gsk-test');
+    const body = JSON.parse(fetchImpl._options.body);
+    expect(body.model).toBe('llama-3.1-8b-instant');
+  });
+
+  it('does not duplicate /v1 when a base URL override already ends in /v1', async () => {
+    saveConnection({ llmProvider: 'groq', llmApiKey: 'gsk-test' }, { cwd: tmp });
+    process.env.LLM_PROVIDER_BASE_URL = 'https://api.groq.com/openai/v1';
+    const fetchImpl = stubFetch({ json: () => ({ choices: [{ message: { content: 'x' } }] }) });
+
+    await generateSummary('summarize', { cwd: tmp, fetchImpl });
+    expect(fetchImpl._url).toBe('https://api.groq.com/openai/v1/chat/completions');
+  });
+
+  it('logs the exact outgoing URL and model before the request fires when verbose', async () => {
+    saveConnection({ llmProvider: 'openai', llmApiKey: 'sk-test' }, { cwd: tmp });
+    const fetchImpl = stubFetch({ json: () => ({ choices: [{ message: { content: 'x' } }] }) });
+    const logs = [];
+    const originalError = console.error;
+    console.error = (...args) => logs.push(args.join(' '));
+    try {
+      await generateSummary('summarize', { cwd: tmp, fetchImpl, verbose: true });
+    } finally {
+      console.error = originalError;
+    }
+    const joined = logs.join('\n');
+    expect(joined).toContain('LLM request → https://api.openai.com/v1/chat/completions');
+    expect(joined).toContain('model: gpt-4o-mini');
+  });
+
   it('rejects with a clear message when not configured', async () => {
     await expect(generateSummary('summarize', { cwd: tmp, fetchImpl: stubFetch({}) })).rejects.toThrow(
       /No LLM provider configured/,

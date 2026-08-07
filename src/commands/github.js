@@ -123,6 +123,7 @@ function analyzeCommand() {
     .description('Analyze repository activity (defaults to the current repo)')
     .argument('[repo]', 'Repository to analyze as "owner/repo" or a GitHub URL')
     .option('--json', 'Output machine-readable JSON to stdout')
+    .option('--verbose', 'Log the exact outgoing LLM request URL and model')
     .action(async (repoArg, opts) => {
       try {
         const { owner, repo } = repoArg
@@ -146,7 +147,7 @@ function analyzeCommand() {
           const prompt = buildSummaryPrompt(analysis, { owner, repo });
           const llmSpinner = process.stdout.isTTY ? ora('Generating plain-English summary...').start() : null;
           try {
-            summary = await generateSummary(prompt);
+            summary = await generateSummary(prompt, { verbose: opts.verbose });
           } catch (err) {
             summary = null;
             output.warning(`AI summary unavailable (${err.message})`);

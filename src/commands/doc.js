@@ -32,6 +32,7 @@ export function docCommand() {
     .option('--yes', 'Confirm the file write without prompting')
     .option('--dry-run', 'Preview the generated documentation without writing')
     .option('--out <path>', `Output file (default: ${DEFAULT_OUTPUT})`)
+    .option('--verbose', 'Log the exact outgoing LLM request URL and model')
     .addCommand(checkCommand())
     .action((message, opts) => {
       if (opts.explain !== undefined) {
@@ -74,7 +75,7 @@ async function generateFlow(message, opts) {
     const spinner = process.stdout.isTTY ? ora('Generating documentation...').start() : null;
     let markdown;
     try {
-      markdown = await generateArchitecture(project, { instruction: message });
+      markdown = await generateArchitecture(project, { instruction: message, verbose: opts.verbose });
     } finally {
       if (spinner) spinner.stop();
     }
@@ -125,7 +126,7 @@ async function explainFlow(message, opts) {
     const spinner = process.stdout.isTTY ? ora('Explaining the project...').start() : null;
     let text;
     try {
-      text = await explain(project, { instruction });
+      text = await explain(project, { instruction, verbose: opts.verbose });
     } finally {
       if (spinner) spinner.stop();
     }

@@ -20,12 +20,16 @@ import { ENV_LLM_KEY, readConfig, readEnv } from './configStore.js';
 const PROVIDER_BASE_URLS = {
   anthropic: 'https://api.anthropic.com',
   openai: 'https://api.openai.com',
-  groq: 'https://api.groq.com',
+  // Groq's OpenAI-compatible root is https://api.groq.com/openai — the CLI
+  // appends /v1/chat/completions below, so this MUST keep the `/openai`
+  // segment. Omitting it produces https://api.groq.com/v1/... which 404s.
+  groq: 'https://api.groq.com/openai',
 };
 
 const DEFAULT_MODELS = {
   anthropic: 'claude-sonnet-4-5',
   openai: 'gpt-4o-mini',
+  // Verified live on Groq's production model list (2026-08): llama-3.1-8b-instant.
   groq: 'llama-3.1-8b-instant',
   other: 'gpt-4o-mini',
 };
@@ -51,13 +55,31 @@ export function isLlmConfigured(opts = {}) {
 }
 
 /**
+ * Builds the OpenAI-compatible chat completions endpoint from a base URL.
+ * Handles bases that already end in `/v1` (e.g. an LLM_PROVIDER_BASE_URL
+ * override pointing straight at https://api.groq.com/openai/v1) so the
+ * version segment is never duplicated.
+ */
+function chatCompletionsEndpoint(baseUrl) {
+  const clean = String(baseUrl).replace(/\/+$/, '');
+  if (/\/v1\/?$/i.test(clean)) return `${clean}/chat/completions`;
+  return `${clean}/v1/chat/completions`;
+}
+
+/** Verbose diagnostics: prints the exact outgoing URL + model to stderr so
+ * misrouted providers are diagnosable from the CLI (`--verbose`). */
+function logOutgoingRequest(provider, url, model) {
+  console.error(`[decode] LLM request → ${url} (provider: ${provider}, model: ${model})`);
+}
+
+/**
  * Requests a text completion (a "summary") from the configured provider.
  * @param {string} prompt
- * @param {{ cwd?: string, fetchImpl?: typeof fetch, maxTokens?: number }} options
+ * @param {{ cwd?: string, fetchImpl?: typeof fetch, maxTokens?: number, verbose?: boolean }} options
  * @returns {Promise<string>} the model's text output
  */
 export async function generateSummary(prompt, options = {}) {
-  const { cwd, fetchImpl = fetch, maxTokens = MAX_TOKENS } = options;
+  const { cwd, fetchImpl = fetch, maxTokens = MAX_TOKENS, verbose } = options;
   const { provider, apiKey } = getLlmConnection({ cwd });
 
   if (!provider || !apiKey) {
@@ -68,9 +90,15 @@ export async function generateSummary(prompt, options = {}) {
 
   const base = process.env.LLM_PROVIDER_BASE_URL || PROVIDER_BASE_URLS[provider];
   const model = DEFAULT_MODELS[provider] || DEFAULT_MODELS.other;
+  const url =
+    provider === 'anthropic' ? `${base}/v1/messages` : chatCompletionsEndpoint(base);
+
+  if (verbose || process.env.DECODE_DEBUG) {
+    logOutgoingRequest(provider, url, model);
+  }
 
   if (provider === 'anthropic') {
-    const res = await fetchImpl(`${base}/v1/messages`, {
+    const res = await fetchImpl(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -89,7 +117,7 @@ export async function generateSummary(prompt, options = {}) {
   }
 
   // openai / groq / other — OpenAI-compatible chat completions
-  const res = await fetchImpl(`${base}/v1/chat/completions`, {
+  const res = await fetchImpl(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
