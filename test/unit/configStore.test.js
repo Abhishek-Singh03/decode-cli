@@ -24,6 +24,8 @@ import {
   setConfigKey,
   resetConfig,
   getConfigSummary,
+  getLastAudit,
+  saveLastAudit,
   ENV_LLM_KEY,
   ENV_GITHUB_TOKEN,
 } from '../../src/services/configStore.js';
@@ -209,5 +211,28 @@ describe('configStore set/reset/summary', () => {
     expect(summary.llm.configured).toBe(true);
     expect(summary.github.configured).toBe(false);
     expect(JSON.stringify(summary)).not.toContain('sk-super-secret');
+  });
+
+  it('returns no last audit before any audit has run', () => {
+    expect(getLastAudit(opts)).toBeNull();
+  });
+
+  it('round-trips a saved audit summary with a ranAt timestamp', () => {
+    const saved = saveLastAudit(
+      { total: 3, passed: 2, failed: 1, skipped: 0, ok: false },
+      opts,
+    );
+    expect(saved.ok).toBe(false);
+    expect(saved.ranAt).toEqual(expect.any(String));
+
+    const lastAudit = getLastAudit(opts);
+    expect(lastAudit).toMatchObject({ total: 3, passed: 2, failed: 1, skipped: 0, ok: false });
+    expect(Date.parse(lastAudit.ranAt)).not.toBeNaN();
+  });
+
+  it('reset clears the saved audit result with the rest of the config', () => {
+    saveLastAudit({ total: 3, passed: 3, failed: 0, skipped: 0, ok: true }, opts);
+    resetConfig(opts);
+    expect(getLastAudit(opts)).toBeNull();
   });
 });

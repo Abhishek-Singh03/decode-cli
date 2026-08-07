@@ -128,4 +128,28 @@ describe('decode audit', () => {
     expect(audit.stdout.toUpperCase()).toContain('PASS');
     expect(audit.stdout).toContain('Summary: 3 passed, 0 failed, 0 skipped');
   });
+
+  it('records the last audit result and decode status reports it', async () => {
+    makeHealthyRepo();
+    addFreshDocs();
+    await run(['api', 'add', `${baseUrl}/ok`]);
+
+    const audit = await run(['audit']);
+    expect(audit.exitCode).toBe(0);
+
+    const config = JSON.parse(fs.readFileSync(path.join(tmp, 'decode.config.json'), 'utf8'));
+    expect(config.audit).toMatchObject({ ok: true, total: 3, passed: 3, failed: 0, skipped: 0 });
+
+    const status = await run(['status']);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain('Last audit');
+    expect(status.stdout.toUpperCase()).toContain('PASS');
+    expect(status.stdout).toContain('3 passed');
+  });
+
+  it('decode status says the audit has not run on a fresh project', async () => {
+    const status = await run(['status']);
+    expect(status.exitCode).toBe(0);
+    expect(status.stdout).toContain('Not run yet');
+  });
 });

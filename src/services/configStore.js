@@ -287,3 +287,30 @@ export function getConfigSummary(opts = {}) {
     updatedAt: config.updatedAt || null,
   };
 }
+// ---- last audit result (`decode status` reads this) ----
+/**
+ * Returns the most recent audit summary saved by `decode audit`, or null if
+ * an audit has never run. Stored under `config.audit` alongside the other
+ * project-local state (e.g. `updatedAt`).
+ * @param {{ cwd?: string }} opts
+ * @returns {null | { ranAt: string, total: number, passed: number, failed: number, skipped: number, ok: boolean }}
+ */
+export function getLastAudit(opts = {}) {
+  const config = readConfig(opts);
+  return config.audit || null;
+}
+
+/**
+ * Persists the summary of a completed audit run so `decode status` can report
+ * it. `ranAt` is stamped here. `decode config reset` clears it with the rest
+ * of the config.
+ * @param {{ total: number, passed: number, failed: number, skipped: number, ok: boolean }} summary
+ * @param {{ cwd?: string }} opts
+ */
+export function saveLastAudit(summary, opts = {}) {
+  const config = readConfig(opts);
+  config.audit = { ...summary, ranAt: new Date().toISOString() };
+  config.updatedAt = new Date().toISOString();
+  writeConfig(config, opts);
+  return config.audit;
+}

@@ -1,12 +1,12 @@
 /**
  * src/commands/status.js
- * `decode status` — show current connection state (PRD story 6, AC2).
- * Reads the config store and prints connection state + config path.
- * (Last audit result will be shown here once the `audit` command lands.)
+ * `decode status` — show current connection state and the last audit result
+ * (PRD story 6, AC2). Reads the config store and prints the connection state,
+ * config path, and the summary persisted by `decode audit`.
  */
 import { Command } from 'commander';
 
-import { getConnection } from '../services/configStore.js';
+import { getConnection, getLastAudit } from '../services/configStore.js';
 import * as output from '../utils/output.js';
 
 export function statusCommand() {
@@ -15,6 +15,7 @@ export function statusCommand() {
     .action(() => {
       try {
         const conn = getConnection();
+        const lastAudit = getLastAudit();
         output.printTable(
           ['Setting', 'Value'],
           [
@@ -22,6 +23,7 @@ export function statusCommand() {
             ['LLM configured', conn.llmConfigured ? 'yes' : 'no'],
             ['GitHub configured', conn.githubConfigured ? 'yes' : 'no'],
             ['Config path', conn.configPath],
+            ['Last audit', lastAuditLabel(lastAudit)],
           ],
         );
         if (conn.connected) {
@@ -34,4 +36,15 @@ export function statusCommand() {
         process.exitCode = 1;
       }
     });
+}
+
+function lastAuditLabel(audit) {
+  if (!audit) return 'Not run yet — try `decode audit`';
+  const verdict = audit.ok ? 'PASS' : 'FAIL';
+  return `${verdict} — ${audit.passed} passed, ${audit.failed} failed, ${audit.skipped} skipped (${formatTime(audit.ranAt)})`;
+}
+
+function formatTime(iso) {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }

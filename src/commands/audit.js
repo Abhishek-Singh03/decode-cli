@@ -7,6 +7,7 @@
 import { Command } from 'commander';
 
 import { runAudit } from '../services/auditRunner.js';
+import { saveLastAudit } from '../services/configStore.js';
 import * as output from '../utils/output.js';
 
 export function auditCommand() {
@@ -17,6 +18,8 @@ export function auditCommand() {
     .action(async (opts) => {
       try {
         const result = await runAudit();
+        // Persist the summary so `decode status` can report the last run.
+        saveLastAudit(result.summary);
         const components = [result.api, result.docs, result.repo];
 
         if (opts.json) {
