@@ -298,46 +298,33 @@ export function isConfigured(opts = {}) {
   return getConnection(opts).connected;
 }
 
-// ---- configured API routes (legacy manual list; see routeDetector for the
-// ---- auto-detected replacement) ----
+// ---- auto-detected route scan cache (see src/services/routeDetector.js) ----
+// `decode api list` scans the project's backend source and caches the result in
+// the project-local config so repeated calls don't rescan (until --refresh).
 
+/** Returns the cached route scan (from local config), or null when absent. */
+export function getRouteCache(opts = {}) {
+  return readConfig(opts).routeCache || null;
+}
+
+/** Persists a route scan into the project-local config tier. */
+export function saveRouteCache(cache, opts = {}) {
+  const config = normalizeConfig(readScopeConfig(SCOPE_LOCAL, opts));
+  config.routeCache = cache;
+  config.updatedAt = new Date().toISOString();
+  writeConfig(config, { ...opts, scope: SCOPE_LOCAL });
+  return cache;
+}
+
+/** Read-only access to the (legacy) `routes` list stored in the config. */
 export function getRoutes(opts = {}) {
   return [...readConfig(opts).routes];
 }
 
-export function addRoute(url, opts = {}) {
-  const clean = String(url).trim();
-  if (!clean) throw new Error('Route URL is required.');
-
-  let parsed;
-  try {
-    parsed = new URL(clean);
-  } catch {
-    throw new Error(`Invalid route URL: ${clean}`);
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error('Route URL must use http or https.');
-  }
-
-  const config = normalizeConfig(readScopeConfig(SCOPE_LOCAL, opts));
-  if (config.routes.includes(clean)) {
-    throw new Error(`Route already configured: ${clean}`);
-  }
-  config.routes.push(clean);
-  config.updatedAt = new Date().toISOString();
-  writeConfig(config, { ...opts, scope: SCOPE_LOCAL });
-  return getRoutes(opts);
-}
-
-export function removeRoute(url, opts = {}) {
-  const clean = String(url).trim();
-  const config = normalizeConfig(readScopeConfig(SCOPE_LOCAL, opts));
-  const index = config.routes.indexOf(clean);
-  if (index === -1) throw new Error(`Route not found: ${clean}`);
-  config.routes.splice(index, 1);
-  config.updatedAt = new Date().toISOString();
-  writeConfig(config, { ...opts, scope: SCOPE_LOCAL });
-  return getRoutes(opts);
+/** Flattens a route scan cache into plain route paths for `config list`. */
+function detectedRoutePaths(cache) {
+  if (!cache || !Array.isArray(cache.routes)) return [];
+  return cache.routes.map((r) => r.path);
 }
 
 // ---- config value management (`decode config list / set / reset`) ----
@@ -433,7 +420,7 @@ export function getConfigSummary(opts = {}) {
       configured: Boolean(env[ENV_GITHUB_TOKEN]),
       tokenScope,
     },
-    routes: [...config.routes],
+    routes: detectedRoutePaths(config.routeCache),
     configPath: getConfigPath({ ...opts, scope: SCOPE_LOCAL }),
     globalConfigPath: getGlobalConfigPath(),
     updatedAt: config.updatedAt || null,

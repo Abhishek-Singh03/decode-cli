@@ -317,9 +317,9 @@ function renderEmpty() {
   return {
     type: 'empty',
     command: 'decode api list',
-    message: 'No routes configured yet.',
+    message: 'No routes detected — add Express routes to your source and re-run.',
     actions: ui.nextActions([
-      { command: 'decode api add <url>', description: 'add your first route' },
+      { command: 'decode api check', description: 'check the auto-detected routes' },
       { command: 'decode init', description: 'run setup wizard' },
     ]),
   };
@@ -425,7 +425,7 @@ function renderShowcase(screenKey) {
 }
 
 function renderAll() {
-  for (const [key, screenDef] of Object.entries(screens)) {
+  for (const [, screenDef] of Object.entries(screens)) {
     console.log('\n' + '═'.repeat(80));
     console.log(ui.emphasis(`  ${screenDef.name}`));
     console.log('═'.repeat(80));

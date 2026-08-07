@@ -31,10 +31,8 @@ decode audit           # run a full check: API health + doc freshness + repo hea
 | `decode status` | Show connection state and config path |
 | `decode config list [--json] / set <key> <value> / reset [--yes]` | View or update configuration (no secrets; `reset` keeps `.env` credentials) |
 | `decode audit [--ci] [--json]` | Run all core checks together |
-| `decode api list` | List configured API routes |
-| `decode api check [routes...] [--json] [--ci] [--spec <path\|url>]` | Check API routes; reports status, time, and pass/fail; exits non-zero on failure |
-| `decode api add <url>` | Add a route to check |
-| `decode api remove <url>` | Remove a configured route |
+| `decode api list [--refresh] [--json]` | Auto-detect backend routes from the project source (Express today); dynamic-segment routes are flagged |
+| `decode api check [paths...] [--base-url <url>] [--spec <path\|url>] [--json] [--ci]` | Check detected routes against a live backend (base from `--base-url` / `PORT` / common dev ports); dynamic routes are skipped, not requested |
 | `decode github connect` | Authenticate with GitHub (verifies your stored token) |
 | `decode github profile` | Show your profile + recently active repos |
 | `decode github analyze [repo] [--json]` | Analyze repo activity — commits, contributors, and an AI summary (defaults to current repo) |

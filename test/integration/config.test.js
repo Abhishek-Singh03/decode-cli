@@ -82,10 +82,9 @@ describe('decode config set', () => {
 });
 
 describe('decode config reset', () => {
-  it('resets metadata and routes but keeps .env credentials', async () => {
-    // set up: a credential + a route
+  it('resets metadata but keeps .env credentials', async () => {
+    // set up: a credential
     await run(['connect', 'sk-key', '--provider', 'openai']);
-    await run(['api', 'add', 'http://a.test/x']);
     fs.writeFileSync(path.join(tmp, '.env'), 'GITHUB_TOKEN=gh-keep-me\nLLM_PROVIDER_API_KEY=sk-key\n', 'utf8');
 
     const reset = await run(['config', 'reset', '--yes']);
@@ -94,7 +93,6 @@ describe('decode config reset', () => {
     const list = await run(['config', 'list', '--json']);
     const parsed = JSON.parse(list.stdout);
     expect(parsed.llm.provider).toBeNull();
-    expect(parsed.routes).toEqual([]);
 
     // credentials survive
     expect(fs.readFileSync(path.join(tmp, '.env'), 'utf8')).toContain('GITHUB_TOKEN=gh-keep-me');

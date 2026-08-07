@@ -11,10 +11,11 @@ Individual developers and small teams who want fast, scriptable, CI-friendly che
 ### 1. API Health Checking
 **As a developer**, I want to check whether my API routes are responding correctly, so I can catch breakages before they reach users.
 
-- **AC1:** `decode api check` hits all configured routes and reports status code, response time, and pass/fail per route.
-- **AC2:** If an OpenAPI spec is provided, response shape is validated against it and mismatches are reported.
-- **AC3:** `decode api check --json` outputs machine-readable JSON.
-- **AC4:** Command exits non-zero if any route fails, so it can gate a CI pipeline.
+- **AC1:** `decode api list` auto-detects the backend's routes from the project source (Express today) and flags routes with dynamic segments; results are cached and refreshed with `--refresh`. There is no manual `api add` anymore.
+- **AC2:** `decode api check` hits the detected routes against a running backend (base from `--base-url`, the `PORT` in `.env`, or common dev ports) and reports status code, response time, and pass/fail per route. Dynamic-param routes are skipped with an explicit note instead of being guessed.
+- **AC3:** If an OpenAPI spec is provided, response shape is validated against it and mismatches are reported.
+- **AC4:** `decode api check --json` outputs machine-readable JSON.
+- **AC5:** Command exits non-zero if any route fails, so it can gate a CI pipeline.
 
 ### 2. GitHub Activity Analysis
 **As a developer**, I want a readable summary of recent repo activity, so I can understand what's changed without manually reading every commit.

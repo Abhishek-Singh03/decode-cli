@@ -124,8 +124,11 @@ async function renderInteractiveAudit() {
   const warnings = buildWarnings(result);
 
   // Compose screen content
+  const overallVerdict = result.summary.ok ? '✓ Audit passed' : '✗ Audit failed';
   const content = [
     healthPulse,
+    overallVerdict,
+    ui.space('tight'),
     'Project Health',
     ui.space('normal'),
     statusRows,
@@ -245,8 +248,8 @@ function buildActions(result) {
   // Priority 2: Fix skipped items
   if (result.api.status === 'skipped') {
     actions.push({
-      command: 'decode api add <url>',
-      description: 'configure API routes',
+      command: 'decode api list',
+      description: 'detect backend API routes',
     });
   }
 
@@ -341,10 +344,7 @@ function renderCiOutput(result) {
   }
 
   lines.push('');
-  lines.push('Summary');
-  lines.push(`${result.summary.passed} passed`);
-  lines.push(`${result.summary.failed} failed`);
-  lines.push(`${result.summary.skipped} skipped`);
+  lines.push(`Summary: ${result.summary.passed} passed, ${result.summary.failed} failed, ${result.summary.skipped} skipped`);
 
   renderer.render(lines.join('\n'));
 }

@@ -19,8 +19,8 @@ import {
   getEnvPath,
   readEnv,
   getRoutes,
-  addRoute,
-  removeRoute,
+  getRouteCache,
+  saveRouteCache,
   setConfigKey,
   resetConfig,
   getConfigSummary,
@@ -126,50 +126,23 @@ describe('configStore', () => {
   });
 });
 
-describe('configStore routes', () => {
-  it('getRoutes returns an empty array by default', () => {
+describe('configStore route scan cache', () => {
+  it('getRoutes returns an empty array by default (manual routes are gone)', () => {
     expect(getRoutes(opts)).toEqual([]);
   });
 
-  it('addRoute persists the route and returns the updated list', () => {
-    const routes = addRoute('http://127.0.0.1:3000/health', opts);
-    expect(routes).toEqual(['http://127.0.0.1:3000/health']);
-    expect(readConfig(opts).routes).toEqual(['http://127.0.0.1:3000/health']);
-    expect(fs.readFileSync(getConfigPath(opts), 'utf8')).toContain('http://127.0.0.1:3000/health');
-  });
-
-  it('addRoute rejects duplicates', () => {
-    addRoute('http://a.test/x', opts);
-    expect(() => addRoute('http://a.test/x', opts)).toThrow(/already configured/i);
-  });
-
-  it('addRoute rejects malformed, relative, and non-http(s) URLs', () => {
-    expect(() => addRoute('not-a-url', opts)).toThrow();
-    expect(() => addRoute('/health', opts)).toThrow();
-    expect(() => addRoute('ftp://a.test/x', opts)).toThrow(/http or https/i);
-  });
-
-  it('removeRoute removes a configured route', () => {
-    addRoute('http://a.test/x', opts);
-    const routes = removeRoute('http://a.test/x', opts);
-    expect(routes).toEqual([]);
-    expect(readConfig(opts).routes).toEqual([]);
-  });
-
-  it('removeRoute throws for an unknown route', () => {
-    expect(() => removeRoute('http://nope.test/x', opts)).toThrow(/not found/i);
-  });
-
-  it('routes survive saveConnection and disconnect', () => {
-    addRoute('http://a.test/x', opts);
-    saveConnection({ llmApiKey: 'sk-test' }, opts);
-    expect(getRoutes(opts)).toEqual(['http://a.test/x']);
-    disconnect(opts);
-    expect(getRoutes(opts)).toEqual(['http://a.test/x']);
+  it('saveRouteCache/getRouteCache round-trips a route scan through the local tier', () => {
+    const scan = { framework: 'express', routes: [{ method: 'get', path: '/ok', file: 'src/app.js', line: 1 }], fingerprint: 'x:1' };
+    const saved = saveRouteCache(scan, opts);
+    expect(saved).toEqual(scan);
+    expect(getRouteCache(opts)).toEqual(scan);
+    // routes surface in the effective config but NOT in the manual `routes` list
+    expect(readConfig(opts).routeCache.routes[0].path).toBe('/ok');
+    expect(getRoutes(opts)).toEqual([]);
   });
 
   it('normalizes a pre-existing null routes field to an empty array', () => {
-    writeConfig({ llm: { provider: null }, github: {}, routes: null }, opts);
+    writeConfig({ llm: null, github: {}, routes: null }, opts);
     expect(getRoutes(opts)).toEqual([]);
   });
 });
@@ -201,7 +174,7 @@ describe('configStore set/reset/summary', () => {
 
   it('resetConfig restores defaults but leaves .env credentials intact', () => {
     saveConnection({ llmProvider: 'anthropic', llmApiKey: 'sk-test', githubToken: 'gh-test' }, opts);
-    addRoute('http://a.test/x', opts);
+    setConfigKey('llm.provider', 'openai', { ...opts, scope: SCOPE_LOCAL });
 
     resetConfig(opts);
 

@@ -29,15 +29,16 @@ const MAX_FILE_BYTES = 10000;
 const MAX_TOTAL_BYTES = 50000;
 
 /**
- * Walks the project and returns its file tree + sampled key-file contents.
- * @param {{ cwd?: string }} options
- * @returns {{ root: string, tree: string[], keyFiles: { path: string, content: string }[] }}
+ * Walks the project directory calling `visitFile(relPath, fullPath)` for every
+ * non-excluded file. Shared by scanProject and routeDetector so the traversal
+ * rules (excluded dirs, excluded files) live in one place.
+ * @param {string} root absolute directory to walk
+ * @param {(relPath: string, fullPath: string) => void} visitFile
+ * @param {{ excludedDirs?: Set<string>, excludedFile?: (name: string) => boolean }} options
  */
-export function scanProject({ cwd } = {}) {
-  const root = cwd || process.cwd();
-  const tree = [];
-  const keyFiles = [];
-  let totalBytes = 0;
+export function walkFiles(root, visitFile, options = {}) {
+  const excludedDirs = options.excludedDirs || EXCLUDED_DIRS;
+  const excluded = options.excludedFile || isExcludedFile;
 
   const walk = (dir, rel) => {
     let entries;
@@ -51,23 +52,57 @@ export function scanProject({ cwd } = {}) {
       const relPath = rel ? `${rel}/${entry.name}` : entry.name;
       const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (EXCLUDED_DIRS.has(entry.name)) continue;
+        if (excludedDirs.has(entry.name)) continue;
         walk(fullPath, relPath);
       } else if (entry.isFile()) {
-        if (isExcludedFile(entry.name)) continue; // e.g. .env — never scan secrets
-        tree.push(relPath);
-        if (isKeyFile(relPath)) {
-          const content = readCapped(fullPath);
-          if (content !== null && totalBytes + content.length <= MAX_TOTAL_BYTES) {
-            totalBytes += content.length;
-            keyFiles.push({ path: relPath, content });
-          }
-        }
+        if (excluded(entry.name)) continue; // e.g. .env — never scan secrets
+        visitFile(relPath, fullPath);
       }
     }
   };
 
   walk(root, '');
+}
+
+/**
+ * Lists the project's JavaScript source files (relative paths, sorted), reusing
+ * the same traversal rules as scanProject. Route detection consumes this so it
+ * never writes its own walker.
+ * @param {{ cwd?: string }} options
+ */
+export function listSourceFiles({ cwd } = {}) {
+  const root = cwd || process.cwd();
+  const files = [];
+  walkFiles(root, (relPath) => {
+    const ext = path.extname(relPath);
+    if (ext === '.js' || ext === '.mjs' || ext === '.cjs') files.push(relPath);
+  });
+  files.sort();
+  return files;
+}
+
+/**
+ * Walks the project and returns its file tree + sampled key-file contents.
+ * @param {{ cwd?: string }} options
+ * @returns {{ root: string, tree: string[], keyFiles: { path: string, content: string }[] }}
+ */
+export function scanProject({ cwd } = {}) {
+  const root = cwd || process.cwd();
+  const tree = [];
+  const keyFiles = [];
+  let totalBytes = 0;
+
+  walkFiles(root, (relPath, fullPath) => {
+    tree.push(relPath);
+    if (isKeyFile(relPath)) {
+      const content = readCapped(fullPath);
+      if (content !== null && totalBytes + content.length <= MAX_TOTAL_BYTES) {
+        totalBytes += content.length;
+        keyFiles.push({ path: relPath, content });
+      }
+    }
+  });
+
   tree.sort();
   return { root, tree, keyFiles };
 }

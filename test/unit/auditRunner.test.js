@@ -1,8 +1,9 @@
 /**
  * test/unit/auditRunner.test.js
- * Unit tests for the composite audit runner. The API check reaches a local
- * http server (hermetic), while docs and repo checks run against a throwaway
- * temp directory. Covers the status model: pass / fail / skipped.
+ * Unit tests for the composite audit runner. The API check auto-detects a
+ * fixture Express backend whose routes point at a local http server (hermetic),
+ * while docs and repo checks run against a throwaway temp directory. Covers the
+ * status model: pass / fail / skipped.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import http from 'node:http';
@@ -12,29 +13,30 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 import { runAudit } from '../../src/services/auditRunner.js';
-import { writeConfig } from '../../src/services/configStore.js';
 
 let server;
-let baseUrl;
+let port;
 let tmp;
+let globalDir;
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
     if (req.url === '/ok') {
-      res.writeHead(200, { 'content-type': 'application/json' });
+      res.writeHead(200);
       res.end('{"ok":true}');
       return;
     }
     if (req.url === '/fail') {
-      res.writeHead(500, { 'content-type': 'application/json' });
+      res.writeHead(500);
       res.end('{"error":"boom"}');
       return;
     }
-    res.writeHead(404, { 'content-type': 'application/json' });
+    res.writeHead(404);
     res.end('{"error":"not found"}');
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  baseUrl = `http://127.0.0.1:${server.address().port}`;
+  port = server.address().port;
 });
 
 afterAll(() => {
@@ -44,9 +46,13 @@ afterAll(() => {
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-audit-unit-'));
+  globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-global-unit-'));
+  process.env.DECODE_GLOBAL_CONFIG_DIR = globalDir;
 });
 
 afterEach(() => {
+  delete process.env.DECODE_GLOBAL_CONFIG_DIR;
+  fs.rmSync(globalDir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -71,15 +77,23 @@ function addFreshDocs() {
   fs.writeFileSync(path.join(tmp, 'docs', 'architecture.md'), '# Docs\n');
 }
 
-function configureRoutes(routes) {
-  writeConfig({ routes }, { cwd: tmp });
+/** Writes an Express fixture exposing the given GET routes at the local server. */
+function addApiBackend(paths) {
+  fs.writeFileSync(
+    path.join(tmp, 'package.json'),
+    JSON.stringify({ name: 'fixture', dependencies: { express: '^4.19.0' } }),
+  );
+  fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+  const routeLines = paths.map((p) => `app.get('${p}', (req, res) => res.json({}));`).join('\n');
+  fs.writeFileSync(path.join(tmp, 'src', 'app.js'), `const app = require('express')();\n${routeLines}\n`);
+  fs.writeFileSync(path.join(tmp, '.env'), `PORT=${port}\n`, 'utf8');
 }
 
 describe('runAudit', () => {
   it('passes all three checks when everything is healthy', async () => {
     makeHealthyRepo();
+    addApiBackend(['/ok']);
     addFreshDocs();
-    configureRoutes([`${baseUrl}/ok`]);
 
     const result = await runAudit({ cwd: tmp });
     expect(result.api.status).toBe('pass');
@@ -91,7 +105,7 @@ describe('runAudit', () => {
   it('fails the audit when an API route fails', async () => {
     makeHealthyRepo();
     addFreshDocs();
-    configureRoutes([`${baseUrl}/fail`]);
+    addApiBackend(['/fail']);
 
     const result = await runAudit({ cwd: tmp });
     expect(result.api.status).toBe('fail');
@@ -105,7 +119,7 @@ describe('runAudit', () => {
   it('skips checks that are not applicable and still reports the docs failure', async () => {
     const result = await runAudit({ cwd: tmp });
     expect(result.api.status).toBe('skipped');
-    expect(result.api.detail).toContain('no routes configured');
+    expect(result.api.detail).toContain('no backend routes detected');
     expect(result.docs.status).toBe('fail');
     expect(result.repo.status).toBe('skipped');
     expect(result.summary.failed).toBe(1);

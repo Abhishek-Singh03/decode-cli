@@ -9,9 +9,9 @@
  * (e.g. no routes configured, not a git repo) and is reported with a reason.
  */
 import { checkRoutes, summarize } from './apiChecker.js';
-import { getRoutes } from './configStore.js';
 import { checkDocStaleness } from './docStaleness.js';
 import { checkRepoHealth } from './repoHealth.js';
+import { resolveBackendBaseUrl, scanRoutes } from './routeDetector.js';
 
 /**
  * @param {{ cwd?: string }} options
@@ -43,11 +43,22 @@ export async function runAudit({ cwd } = {}) {
 }
 
 async function runApiCheck({ cwd }) {
-  const routes = getRoutes({ cwd });
-  if (routes.length === 0) {
-    return { name: 'api', status: 'skipped', detail: 'no routes configured' };
+  const scan = scanRoutes({ cwd });
+  if (!scan.routes.length) {
+    return { name: 'api', status: 'skipped', detail: 'no backend routes detected' };
   }
 
+  const base = await resolveBackendBaseUrl({ cwd });
+  if (!base) {
+    return { name: 'api', status: 'skipped', detail: 'no reachable backend — set PORT in .env' };
+  }
+
+  const staticRoutes = scan.routes.filter((r) => !r.hasParams);
+  if (staticRoutes.length === 0) {
+    return { name: 'api', status: 'skipped', detail: 'all detected routes are dynamic — no live checks possible' };
+  }
+
+  const routes = staticRoutes.map((r) => `${base.replace(/\/+$/, '')}${r.path.startsWith('/') ? r.path : `/${r.path}`}`);
   const results = await checkRoutes(routes);
   const s = summarize(results);
   if (s.ok) {

@@ -49,7 +49,7 @@ Config Store  LLM Client  GitHub Client
 - **No database** — DeCode is stateless between runs beyond the config files; each command reads fresh data (API responses, GitHub API data, filesystem) at call time.
 
 ## Command Modules
-- `api` — route management (`list`/`add`/`remove`) and health checking (`check [routes...]`) against configured or provided routes
+- `api` — auto-detected route discovery (`list`, cached in the project config with `--refresh`) and health checking (`check`) against a live backend. Routes are detected from the project's Express source (`src/services/routeDetector.js`); dynamic-segment routes are flagged / skipped rather than guessed. The manual `add`/`remove` flow no longer exists
 - `github` — repo/profile activity analysis via GitHub API (`connect`/`profile`/`analyze`)
 - `doc` — documentation generation (`doc [message]`, `doc --explain`) and staleness checking (`doc check`)
 - `audit` — composes the API, docs, and repo-health checks into one summary (`--json` / `--ci`)

@@ -17,7 +17,6 @@ import { execFileSync } from 'node:child_process';
 const CLI = fileURLToPath(new URL('../../bin/decode.js', import.meta.url));
 
 let server;
-let baseUrl;
 let tmp;
 let globalDir;
 
@@ -32,7 +31,6 @@ beforeAll(async () => {
     res.end('{"error":"not found"}');
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  baseUrl = `http://127.0.0.1:${server.address().port}`;
 });
 
 afterAll(() => {
@@ -77,11 +75,25 @@ function addFreshDocs() {
   fs.writeFileSync(path.join(tmp, 'docs', 'architecture.md'), '# Docs\n');
 }
 
+/** Adds an Express backend fixture whose /ok route points at the local server. */
+function addApiBackend() {
+  fs.writeFileSync(
+    path.join(tmp, 'package.json'),
+    JSON.stringify({ name: 'fixture', dependencies: { express: '^4.19.0' } }),
+  );
+  fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
+  fs.writeFileSync(
+    path.join(tmp, 'src', 'app.js'),
+    "const app = require('express')();\napp.get('/ok', (req, res) => res.json({ ok: true }));\n",
+  );
+  fs.writeFileSync(path.join(tmp, '.env'), `PORT=${server.address().port}\n`, 'utf8');
+}
+
 describe('decode audit', () => {
   it('reports a combined pass and exits 0 when everything is healthy', async () => {
     makeHealthyRepo();
+    addApiBackend();
     addFreshDocs();
-    await run(['api', 'add', `${baseUrl}/ok`]);
 
     const audit = await run(['audit']);
     expect(audit.exitCode).toBe(0);
@@ -100,8 +112,8 @@ describe('decode audit', () => {
 
   it('emits a machine-readable summary with --json', async () => {
     makeHealthyRepo();
+    addApiBackend();
     addFreshDocs();
-    await run(['api', 'add', `${baseUrl}/ok`]);
 
     const audit = await run(['audit', '--json']);
     expect(audit.exitCode).toBe(0);
@@ -125,8 +137,8 @@ describe('decode audit', () => {
 
   it('--ci prints plain PASS/FAIL lines with a summary and the same exit code', async () => {
     makeHealthyRepo();
+    addApiBackend();
     addFreshDocs();
-    await run(['api', 'add', `${baseUrl}/ok`]);
 
     const audit = await run(['audit', '--ci']);
     expect(audit.exitCode).toBe(0);
@@ -136,8 +148,8 @@ describe('decode audit', () => {
 
   it('records the last audit result and decode status reports it', async () => {
     makeHealthyRepo();
+    addApiBackend();
     addFreshDocs();
-    await run(['api', 'add', `${baseUrl}/ok`]);
 
     const audit = await run(['audit']);
     expect(audit.exitCode).toBe(0);
