@@ -21,6 +21,9 @@ import {
   getRoutes,
   addRoute,
   removeRoute,
+  setConfigKey,
+  resetConfig,
+  getConfigSummary,
   ENV_LLM_KEY,
   ENV_GITHUB_TOKEN,
 } from '../../src/services/configStore.js';
@@ -156,5 +159,55 @@ describe('configStore routes', () => {
   it('normalizes a pre-existing null routes field to an empty array', () => {
     writeConfig({ llm: { provider: null }, github: {}, routes: null }, opts);
     expect(getRoutes(opts)).toEqual([]);
+  });
+});
+
+describe('configStore set/reset/summary', () => {
+  it('setConfigKey persists a dotted-path value and bumps updatedAt', () => {
+    setConfigKey('llm.provider', 'openai', opts);
+    const config = readConfig(opts);
+    expect(config.llm.provider).toBe('openai');
+    expect(config.updatedAt).toBeTruthy();
+  });
+
+  it('setConfigKey rejects secret-looking keys', () => {
+    for (const key of ['llm.apiKey', 'github.token', 'llm.apiKeyRef', 'github.password']) {
+      expect(() => setConfigKey(key, 'x', opts)).toThrow(/credential/i);
+    }
+  });
+
+  it('setConfigKey rejects unknown roots and missing values', () => {
+    expect(() => setConfigKey('routes.foo', 'x', opts)).toThrow(/llm|github/);
+    expect(() => setConfigKey('foo.bar', 'x', opts)).toThrow(/llm|github/);
+    expect(() => setConfigKey('', 'x', opts)).toThrow(/Usage/);
+    expect(() => setConfigKey('llm.provider', '  ', opts)).toThrow(/Usage/);
+  });
+
+  it('setConfigKey rejects a bare root without a leaf', () => {
+    expect(() => setConfigKey('llm', 'openai', opts)).toThrow(/dotted path/);
+  });
+
+  it('resetConfig restores defaults but leaves .env credentials intact', () => {
+    saveConnection({ llmProvider: 'anthropic', llmApiKey: 'sk-test', githubToken: 'gh-test' }, opts);
+    addRoute('http://a.test/x', opts);
+
+    resetConfig(opts);
+
+    const config = readConfig(opts);
+    expect(config.llm.provider).toBeNull();
+    expect(config.routes).toEqual([]);
+
+    const env = readEnv(opts);
+    expect(env[ENV_LLM_KEY]).toBe('sk-test');
+    expect(env[ENV_GITHUB_TOKEN]).toBe('gh-test');
+  });
+
+  it('getConfigSummary reports configured flags without any secret values', () => {
+    saveConnection({ llmProvider: 'groq', llmApiKey: 'sk-super-secret' }, opts);
+    const summary = getConfigSummary(opts);
+    expect(summary.llm.provider).toBe('groq');
+    expect(summary.llm.configured).toBe(true);
+    expect(summary.github.configured).toBe(false);
+    expect(JSON.stringify(summary)).not.toContain('sk-super-secret');
   });
 });

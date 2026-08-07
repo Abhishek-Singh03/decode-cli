@@ -29,7 +29,7 @@ decode audit           # run a full check: API health + doc freshness + repo hea
 | `decode connect <api-key>` | Store an LLM/API provider key |
 | `decode disconnect` | Remove stored credentials |
 | `decode status` | Show connection status, last audit result, config path |
-| `decode config list / set / reset` | View or update configuration |
+| `decode config list [--json] / set <key> <value> / reset [--yes]` | View or update configuration (no secrets; `reset` keeps `.env` credentials) |
 | `decode audit [--ci] [--json]` | Run all core checks together |
 | `decode api list` | List configured API routes |
 | `decode api check [routes...] [--json] [--ci] [--spec <path\|url>]` | Check API routes; reports status, time, and pass/fail; exits non-zero on failure |

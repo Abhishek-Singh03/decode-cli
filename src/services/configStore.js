@@ -210,3 +210,80 @@ export function removeRoute(url, opts = {}) {
   writeConfig(config, opts);
   return getRoutes(opts);
 }
+
+// ---- config value management (`decode config list / set / reset`) ----
+
+/** Key segments that signal a credential — these belong in .env, not the config file. */
+const SECRET_HINTS = /key|token|secret|password|credential/i;
+
+const ALLOWED_ROOTS = new Set(['llm', 'github']);
+
+/**
+ * Sets a non-secret config value by dotted path (e.g. "llm.provider").
+ * Rejects secret-looking keys and any root outside llm/github so credentials
+ * can never leak into decode.config.json (AGENTS.md rule 3).
+ */
+export function setConfigKey(key, value, opts = {}) {
+  const cleanKey = String(key || '').trim();
+  const cleanValue = String(value ?? '').trim();
+  if (!cleanKey || !cleanValue) throw new Error('Usage: decode config set <key> <value>');
+
+  const segments = cleanKey.split('.').map((s) => s.trim()).filter(Boolean);
+  const root = segments[0];
+  if (!ALLOWED_ROOTS.has(root)) {
+    throw new Error(`Invalid config key "${cleanKey}" — only llm.* and github.* paths are settable.`);
+  }
+  if (SECRET_HINTS.test(cleanKey)) {
+    throw new Error(
+      `"${cleanKey}" looks like a credential. Credentials are managed by \`decode init\` / \`decode connect\` and stored in .env.`,
+    );
+  }
+  if (segments.length < 2) {
+    throw new Error(`Invalid config key "${cleanKey}" — expected a dotted path like "llm.provider".`);
+  }
+
+  const config = readConfig(opts);
+  let target = config[root];
+  for (let i = 1; i < segments.length - 1; i += 1) {
+    if (target[segments[i]] == null || typeof target[segments[i]] !== 'object') {
+      target[segments[i]] = {};
+    }
+    target = target[segments[i]];
+  }
+  target[segments[segments.length - 1]] = cleanValue;
+
+  config.updatedAt = new Date().toISOString();
+  writeConfig(config, opts);
+  return config;
+}
+
+/**
+ * Resets the config file to defaults (metadata + routes cleared). Credentials
+ * in .env are intentionally untouched — `decode disconnect` removes those.
+ */
+export function resetConfig(opts = {}) {
+  const config = defaultConfig();
+  config.updatedAt = new Date().toISOString();
+  writeConfig(config, opts);
+  return config;
+}
+
+/** A clean, secret-free summary of the config for display / --json. */
+export function getConfigSummary(opts = {}) {
+  const config = readConfig(opts);
+  const env = readEnv(opts);
+  return {
+    llm: {
+      provider: config.llm.provider,
+      apiKeyRef: config.llm.apiKeyRef,
+      configured: Boolean(env[ENV_LLM_KEY]),
+    },
+    github: {
+      tokenRef: config.github.tokenRef,
+      configured: Boolean(env[ENV_GITHUB_TOKEN]),
+    },
+    routes: [...config.routes],
+    configPath: getConfigPath(opts),
+    updatedAt: config.updatedAt || null,
+  };
+}
