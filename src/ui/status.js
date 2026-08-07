@@ -56,8 +56,6 @@ export function statusDot(status) {
  */
 export function statusRow({ status, label, verdict, detail = '', labelWidth = 15, verdictWidth = 30 }) {
   const dot = statusDot(status);
-  const paddedLabel = label.padEnd(labelWidth);
-  const paddedVerdict = verdict.padEnd(verdictWidth);
 
   // Apply styling
   const styledLabel = label;

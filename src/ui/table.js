@@ -5,8 +5,7 @@
  * Philosophy: Tables are for data, not decoration.
  * No boxes, no borders. Just aligned columns with clear hierarchy.
  */
-import chalk from 'chalk';
-import { gridRow, measure, space } from './layout.js';
+import { gridRow, measure } from './layout.js';
 import * as type from './typography.js';
 import { statusRow } from './status.js';
 

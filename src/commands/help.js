@@ -104,8 +104,10 @@ export function renderLandingScreen() {
  * If text is wider than width, return as-is.
  */
 function centerText(text, width) {
-  // Strip ANSI codes to get true text length
-  const strippedText = text.replace(/\u001b\[\d+m/g, '');
+  // Strip ANSI escape sequences to get true text length (dynamic RegExp avoids
+  // an in-literal control character that eslint's no-control-regex forbids).
+  const ANSI_RE = new RegExp(String.fromCharCode(27) + '\\[[0-9;]*m', 'g');
+  const strippedText = text.replace(ANSI_RE, '');
 
   if (strippedText.length >= width) {
     return text; // Text too wide, return as-is
@@ -121,14 +123,6 @@ function centerText(text, width) {
 function formatCommand(command, description) {
   return `${chalk.white(command.padEnd(20))}${chalk.dim(description)}`;
 }
-
-/**
- * Format a simple command name (for grouped sections).
- */
-function formatCommandSimple(name) {
-  return `${chalk.white(name)}`;
-}
-
 /**
  * Build a single command card with Unicode box borders.
  */

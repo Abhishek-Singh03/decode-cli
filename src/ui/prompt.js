@@ -7,7 +7,6 @@
  */
 import * as type from './typography.js';
 import { arrows } from './icons.js';
-import { space } from './layout.js';
 
 /**
  * Format a confirmation prompt.

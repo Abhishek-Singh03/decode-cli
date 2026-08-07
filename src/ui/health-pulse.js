@@ -6,7 +6,7 @@
  * You see the shape before you read the words.
  */
 import { statusDot, statusDots } from './status.js';
-import { space, alignRow } from './layout.js';
+import { alignRow } from './layout.js';
 import * as type from './typography.js';
 
 /**

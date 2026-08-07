@@ -6,7 +6,7 @@
  * Use panels only when content needs visual containment (previews, quotes, special sections).
  */
 import chalk from 'chalk';
-import { wrap, space } from './layout.js';
+import { wrap } from './layout.js';
 import * as type from './typography.js';
 
 /**
@@ -50,7 +50,6 @@ export function panel({ title, content, width = 60, borderColor = 'cyan', trunca
 
   // Title line (if provided)
   if (title) {
-    const titleLine = '│ ' + title.padEnd(width - 4) + ' │';
     lines.push(chalk[borderColor]('│') + type.body(' ' + title.padEnd(width - 4) + ' ') + chalk[borderColor]('│'));
 
     // Separator after title
