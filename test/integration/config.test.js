@@ -81,6 +81,27 @@ describe('decode config set', () => {
   });
 });
 
+describe('decode config root resolution from subdirectories', () => {
+  it('walks up from a nested cwd to the project-local config, merging global', async () => {
+    // Global says groq; the local project overrides to openai.
+    const setGlobal = await run(['config', 'set', 'llm.provider', 'groq', '--global']);
+    expect(setGlobal.exitCode).toBe(0);
+    const setLocal = await run(['config', 'set', 'llm.provider', 'openai', '--local']);
+    expect(setLocal.exitCode).toBe(0);
+
+    // Run from a subdirectory like backend/api — resolution should still find
+    // the project-local config above it, not the cwd itself.
+    const nested = path.join(tmp, 'backend', 'api');
+    fs.mkdirSync(nested, { recursive: true });
+
+    const list = await run(['config', 'list', '--json'], { cwd: nested });
+    expect(list.exitCode).toBe(0);
+    const parsed = JSON.parse(list.stdout);
+    expect(parsed.llm.provider).toBe('openai'); // local override found by walk-up
+    expect(parsed.llm.providerScope).toBe('local');
+  });
+});
+
 describe('decode config reset', () => {
   it('resets metadata but keeps .env credentials', async () => {
     // set up: a credential

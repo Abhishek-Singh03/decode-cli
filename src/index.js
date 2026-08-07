@@ -28,6 +28,7 @@ program
   .description(DESCRIPTION)
   .version(VERSION, '-v, --version')
   .showHelpAfterError()
+  .showSuggestionAfterError()
   .addCommand(initCommand())
   .addCommand(connectCommand())
   .addCommand(disconnectCommand())
@@ -38,7 +39,16 @@ program
   .addCommand(configCommand())
   .addCommand(auditCommand());
 
-// Override default help with custom landing screen
+// The built-in help subcommand is replaced by a custom landing screen, so
+// re-register `decode help` manually — unknown subcommands now get a suggestion
+// via showSuggestionAfterError and a working help command.
+program
+  .command('help')
+  .description('Display DeCode usage and the command list')
+  .action(() => {
+    program.outputHelp();
+  });
+
 program.addHelpCommand(false);
 program.on('--help', () => {
   renderLandingScreen();
