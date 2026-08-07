@@ -17,11 +17,17 @@ import {
   getAuthenticatedUser,
   getGithubClient,
   getRepoCommitsDetailed,
+  getUserCommitActivity,
   listReposForUser,
   detectCurrentRepo,
   resolveRepoArg,
 } from '../services/githubClient.js';
-import { analyzeCommits, buildSummaryPrompt } from '../services/repoAnalyst.js';
+import {
+  analyzeActivity,
+  analyzeCommits,
+  buildProfileSummaryPrompt,
+  buildSummaryPrompt,
+} from '../services/repoAnalyst.js';
 import { generateSummary, isLlmConfigured } from '../services/llmClient.js';
 import { saveConnection } from '../services/configStore.js';
 import * as output from '../utils/output.js';
@@ -70,52 +76,109 @@ function connectCommand() {
 
 function profileCommand() {
   return new Command('profile')
-    .description('Show your GitHub profile and commit record')
-    .action(async () => {
+    .description('Show your GitHub profile, recent commit record, and an AI activity narrative')
+    .option('--json', 'Output machine-readable JSON to stdout')
+    .action(async (opts) => {
       try {
         const client = getGithubClient();
         const user = await getAuthenticatedUser(client);
-        const spinner = process.stdout.isTTY ? ora('Fetching your repos...').start() : null;
+        const spinner = process.stdout.isTTY ? ora('Fetching your repos and commits...').start() : null;
         let repos = [];
+        let activity = { commits: [], detail: [] };
         try {
           repos = await listReposForUser(client, { login: user.login });
+          activity = await getUserCommitActivity(client, { login: user.login });
         } finally {
           if (spinner) spinner.stop();
         }
 
-        output.printBox(
-          user.login,
-          [
-            user.name && `Name:        ${user.name}`,
-            user.bio && `Bio:         ${user.bio}`,
-            `Public repos: ${user.public_repos}`,
-            `Followers:    ${user.followers}`,
-            `Following:    ${user.following}`,
-            `Profile:      ${user.html_url}`,
-          ]
-            .filter(Boolean)
-            .join('\n'),
-          { borderColor: 'green' },
-        );
+        if (opts.json) {
+          output.printJson({
+            profile: { login: user.login, name: user.name || null, public_repos: user.public_repos, followers: user.followers },
+            repos: repos.slice(0, 10).map((repo) => ({
+              repo: repo.full_name,
+              language: repo.language,
+              lastPush: repo.pushed_at ? repo.pushed_at.slice(0, 10) : null,
+            })),
+            recentCommits: activity.commits,
+          });
+          return;
+        }
 
-        if (repos.length > 0) {
-          output.heading('Recently active repositories');
-          output.printTable(
-            ['Repo', 'Language', 'Last push'],
-            repos.slice(0, 10).map((repo) => [
-              `${repo.full_name}`,
-              repo.language || '—',
-              repo.pushed_at ? new Date(repo.pushed_at).toISOString().slice(0, 10) : '—',
-            ]),
-          );
-        } else {
-          output.info('No public repositories found for your account.');
+        renderProfile(user, repos, activity);
+
+        // Narrative is grounded in the computed activity metrics — failure still
+        // leaves the tables above visible (resilient, like github analyze).
+        if (activity.detail.length > 0 && isLlmConfigured()) {
+          const metrics = analyzeActivity(activity.detail);
+          const prompt = buildProfileSummaryPrompt(metrics, { login: user.login });
+          const llmSpinner = process.stdout.isTTY ? ora('Summarizing your activity...').start() : null;
+          try {
+            const narrative = await generateSummary(prompt, { verbose: opts.verbose });
+            output.printBox('Activity narrative', narrative, { borderColor: 'magenta' });
+          } catch (err) {
+            output.warning(`AI activity summary unavailable (${err.message})`);
+          } finally {
+            if (llmSpinner) llmSpinner.stop();
+          }
         }
       } catch (err) {
         output.error(`github profile failed: ${err.message}`);
         process.exitCode = 1;
       }
     });
+}
+
+function renderProfile(user, repos, activity) {
+  output.printBox(
+    user.login,
+    [
+      user.name ? `Name:        ${user.name}` : null,
+      user.bio ? `Bio:         ${user.bio}` : null,
+      `Public repos: ${user.public_repos}`,
+      `Followers:   ${user.followers}`,
+      `Following:   ${user.following}`,
+      `Profile:     ${user.html_url}`,
+    ]
+      .filter(Boolean)
+      .join('\n'),
+    { borderColor: 'green' },
+  );
+
+  if (repos.length > 0) {
+    output.heading('Recently active repositories');
+    output.printTable(
+      ['Repo', 'Language', 'Last push'],
+      repos.slice(0, 10).map((repo) => [
+        `${repo.full_name}`,
+        repo.language || '—',
+        repo.pushed_at ? new Date(repo.pushed_at).toISOString().slice(0, 10) : '—',
+      ]),
+    );
+  } else {
+    output.info('No public repositories found for your account.');
+  }
+
+  // Recent commit history pulled from the authenticated user's own activity.
+  output.heading('Recent commits');
+  if (activity.commits.length > 0) {
+    output.printTable(
+      ['When', 'Repo', 'Files', 'Message'],
+      activity.commits.slice(0, 15).map((c) => [
+        c.date,
+        c.repo || '—',
+        String(c.files),
+        truncate(c.message, 42),
+      ]),
+    );
+  } else {
+    output.info('No recent commits found across your repositories.');
+  }
+}
+
+function truncate(text, max) {
+  const t = String(text || '');
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
 function analyzeCommand() {

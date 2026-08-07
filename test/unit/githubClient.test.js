@@ -15,6 +15,7 @@ import {
   getGithubClient,
   getRepoCommits,
   getRepoCommitsDetailed,
+  getUserCommitActivity,
   resolveRepoArg,
   detectCurrentRepo,
 } from '../../src/services/githubClient.js';
@@ -154,5 +155,50 @@ describe('getRepoCommitsDetailed / enrichCommits', () => {
     expect(detailed).toHaveLength(2);
     expect(detailed[0].files[0].filename).toBe('src/a.js');
     expect(detailed[1].files).toBeUndefined();
+  });
+});
+
+describe('getUserCommitActivity', () => {
+  it('collects commits across the user repos and attaches enriched file counts', async () => {
+    const fake = {
+      rest: {
+        repos: {
+          listForUser: async () => ({ data: [{ name: 'api' }, { name: 'cli' }] }),
+          listCommits: async ({ repo }) =>
+            repo === 'api'
+              ? {
+                  data: [
+                    { sha: 'a1', commit: { author: { date: '2026-08-01T10:00:00Z' }, message: 'one' }, author: { login: 'octocat' } },
+                    { sha: 'a2', commit: { author: { date: '2026-08-01T12:00:00Z' }, message: 'two' }, author: { login: 'octocat' } },
+                  ],
+                }
+              : {
+                  data: [{ sha: 'c1', commit: { author: { date: '2026-08-02T09:00:00Z' }, message: 'three' }, author: { login: 'octocat' } }],
+                },
+          getCommit: async ({ repo, ref }) => ({ data: { files: [{ filename: `${repo}-${ref}.js` }], stats: {} } }),
+        },
+      },
+    };
+
+    const { commits } = await getUserCommitActivity(fake, { login: 'octocat', repoLimit: 5, perRepoLimit: 8, totalLimit: 30 });
+    expect(commits).toHaveLength(3);
+    // sorted newest-first
+    expect(commits[0].date).toBe('2026-08-02');
+    // every commit was enriched with exactly one file
+    expect(commits.every((c) => c.files === 1)).toBe(true);
+    expect(commits.every((c) => c.repo === 'api' || c.repo === 'cli')).toBe(true);
+  });
+
+  it('returns empty commits when repos or commits cannot be fetched', async () => {
+    const broken = {
+      rest: {
+        repos: {
+          listForUser: async () => ({ data: [{ name: 'api' }] }),
+          listCommits: async () => Promise.reject(new Error('nope')),
+        },
+      },
+    };
+    const { commits } = await getUserCommitActivity(broken, { login: 'octocat' });
+    expect(commits).toEqual([]);
   });
 });

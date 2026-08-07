@@ -78,19 +78,72 @@ export async function getRepoCommitsDetailed(client, { owner, repo }, options = 
   return enrichCommits(client, commits, { owner, repo, enrichLimit });
 }
 
-/** Adds `files` + `stats` to the newest `enrichLimit` commits. */
+/**
+ * Adds `files` + `stats` to the newest `enrichLimit` commits. Commits carrying a
+ * `_repo` field (from getUserCommitActivity) are resolved in that repo, so the
+ * same helper serves single-repo analysis and cross-repo activity.
+ */
 export async function enrichCommits(client, commits, { owner, repo, enrichLimit = 100 } = {}) {
   const head = commits.slice(0, enrichLimit);
   const detailed = await mapConcurrent(head, 8, async (commit) => {
     if (commit.files || commit.stats) return commit; // already has detail
+    const commitRepo = commit._repo || repo;
     try {
-      const { data } = await client.rest.repos.getCommit({ owner, repo, ref: commit.sha });
-      return { ...commit, files: data.files, stats: data.stats };
+      const { data } = await client.rest.repos.getCommit({ owner, repo: commitRepo, ref: commit.sha });
+      return { ...commit, files: data.files, stats: data.stats, repo: commitRepo };
     } catch {
       return commit; // unauthorized/not found — keep the list-entry as-is
     }
   });
   return [...detailed, ...commits.slice(enrichLimit)];
+}
+
+/**
+ * Collects the authenticated user's recent commit activity across their own
+ * repositories (most-pushed first), sorts newest-first, caps it, and enriches
+ * the newest entries with file counts. Powers `decode github profile`.
+ */
+export async function getUserCommitActivity(client, { login, repoLimit = 3, perRepoLimit = 8, totalLimit = 30 } = {}) {
+  let repositories = [];
+  try {
+    const { data } = await client.rest.repos.listForUser({ username: login, per_page: repoLimit, sort: 'pushed' });
+    repositories = Array.isArray(data) ? data : [];
+  } catch {
+    return { commits: [], detail: [] };
+  }
+
+  const collected = [];
+  for (const repo of repositories) {
+    if (collected.length >= totalLimit) break;
+    try {
+      const { data: list } = await client.rest.repos.listCommits({
+        owner: login,
+        repo: repo.name,
+        author: login,
+        per_page: perRepoLimit,
+      });
+      for (const c of list || []) {
+        collected.push(c._repo ? c : { ...c, _repo: repo.name });
+      }
+    } catch {
+      // skip repos whose commits can't be listed (private/unreachable)
+    }
+  }
+
+  collected.sort((a, b) =>
+    (b.commit?.author?.date || '').localeCompare(a.commit?.author?.date || ''),
+  );
+  const top = collected.slice(0, totalLimit);
+  const detail = await enrichCommits(client, top, { owner: login, enrichLimit: totalLimit });
+
+  const commits = detail.map((c) => ({
+    repo: c.repo || c._repo || null,
+    sha: c.sha || '',
+    date: (c.commit?.author?.date || '').slice(0, 10),
+    message: c.commit?.message || '',
+    files: Array.isArray(c.files) ? c.files.length : 0,
+  }));
+  return { commits, detail };
 }
 
 /** Runs `mapper` over `items` with bounded concurrency, preserving order. */

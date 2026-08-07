@@ -34,7 +34,7 @@ decode audit           # run a full check: API health + doc freshness + repo hea
 | `decode api list [--refresh] [--json]` | Auto-detect backend routes from the project source (Express today); dynamic-segment routes are flagged |
 | `decode api check [paths...] [--base-url <url>] [--spec <path\|url>] [--json] [--ci]` | Check detected routes against a live backend (base from `--base-url` / `PORT` / common dev ports); dynamic routes are skipped, not requested |
 | `decode github connect` | Authenticate with GitHub (verifies your stored token) |
-| `decode github profile` | Show your profile + recently active repos |
+| `decode github profile` | Show your profile, recently active repos, recent commit history (message · date · files changed), and an AI activity narrative |
 | `decode github analyze [repo] [--json]` | Analyze repo activity — commits, contributors, and an AI summary (defaults to current repo) |
 | `decode doc [message] [--yes] [--dry-run] [--out <path>]` | Generate project documentation (previewed and approval-gated before writing) |
 | `decode doc --explain [instruction]` | Explain the project or a specific part (read-only) |

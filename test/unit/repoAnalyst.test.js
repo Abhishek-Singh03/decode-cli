@@ -5,8 +5,10 @@
 import { describe, it, expect } from 'vitest';
 
 import {
+  analyzeActivity,
   analyzeCommits,
   analyzeCommitQuality,
+  buildProfileSummaryPrompt,
   buildSummaryPrompt,
   commitChangeCount,
   isDocsOnlyCommit,
@@ -179,5 +181,57 @@ describe('commit quality heuristics', () => {
     expect(analysis.quality.docsOnlyCount).toBe(1);
     expect(analysis.quality.vagueMessageCount).toBe(1);
     expect(buildSummaryPrompt(analysis, { owner: 'octo', repo: 'repo' })).toContain('docs-only');
+  });
+});
+
+describe('profile activity analysis', () => {
+  function actCommit({ repo, sha, message, date, files = null } = {}) {
+    const base = {
+      sha,
+      repo,
+      commit: { author: { name: 'octocat', date }, message },
+      author: { login: 'octocat' },
+    };
+    if (files) base.files = files;
+    return base;
+  }
+
+  it('computes per-repo, per-day, hygiene, and avg-files metrics', () => {
+    const commits = [
+      actCommit({ repo: 'api', sha: 'a1', message: 'Add endpoint tests', date: '2026-08-01T10:00:00Z', files: [{ filename: 'src/a.js' }] }),
+      actCommit({ repo: 'api', sha: 'a2', message: 'update', date: '2026-08-01T11:00:00Z', files: [{ filename: 'README.md' }] }),
+      actCommit({ repo: 'cli', sha: 'c1', message: 'Fix the flag parser', date: '2026-08-02T09:00:00Z', files: [{ filename: 'a.js' }, { filename: 'b.js' }] }),
+    ];
+
+    const activity = analyzeActivity(commits);
+    expect(activity.totalCommits).toBe(3);
+    expect(activity.repos).toEqual([
+      { repo: 'api', count: 2 },
+      { repo: 'cli', count: 1 },
+    ]);
+    expect(activity.docsOnlyCount).toBe(1); // a2 touched only README.md
+    expect(activity.vagueMessageCount).toBe(1); // 'update'
+    expect(activity.avgFilesPerCommit).toBeCloseTo(4 / 3, 1);
+    expect(activity.busiestDays).toEqual(['2026-08-01']);
+  });
+
+  it('gives empty activity for no commits', () => {
+    const activity = analyzeActivity([]);
+    expect(activity.totalCommits).toBe(0);
+    expect(activity.repos).toEqual([]);
+    expect(activity.avgFilesPerCommit).toBeNull();
+    expect(activity.busiestDays).toEqual([]);
+  });
+
+  it('grounds the profile narrative prompt in the computed metrics', () => {
+    const activity = analyzeActivity([
+      actCommit({ repo: 'api', sha: 'a', message: 'Improve the docs', date: '2026-08-01T10:00:00Z', files: [{ filename: 'README.md' }] }),
+    ]);
+    const prompt = buildProfileSummaryPrompt(activity, { login: 'octocat' });
+
+    expect(prompt).toContain('octocat');
+    expect(prompt).toContain('api');
+    expect(prompt.toLowerCase()).toContain('docs-only commits: 1');
+    expect(prompt).toContain('Repositories touched');
   });
 });

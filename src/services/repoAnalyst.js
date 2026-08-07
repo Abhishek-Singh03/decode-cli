@@ -156,6 +156,72 @@ export function analyzeCommits(commits) {
   };
 }
 
+/**
+ * Analyzes a user's recent activity across repositories (enriched commit data
+ * from githubClient.getUserCommitActivity) into pattern metrics used to ground
+ * the profile narrative and the "Recent commits" rendering.
+ */
+export function analyzeActivity(commits) {
+  const repos = new Map();
+  const days = new Map();
+  let docsOnlyCount = 0;
+  let vagueMessageCount = 0;
+  let filesTotal = 0;
+  let filesKnown = 0;
+
+  for (const c of commits) {
+    const repo = c.repo || 'unknown';
+    repos.set(repo, (repos.get(repo) || 0) + 1);
+
+    const date = (c.commit?.author?.date || '').slice(0, 10);
+    if (date) days.set(date, (days.get(date) || 0) + 1);
+
+    if (isDocsOnlyCommit(c)) docsOnlyCount += 1;
+    if (isVagueCommitMessage(c.commit?.message)) vagueMessageCount += 1;
+    if (Array.isArray(c.files)) {
+      filesKnown += 1;
+      filesTotal += c.files.length;
+    }
+  }
+
+  const commitFrequency = [...days.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const maxCount = commitFrequency.reduce((m, d) => Math.max(m, d.count), 0);
+  const busiestDays = commitFrequency.filter((d) => d.count === maxCount && maxCount > 0).map((d) => d.date);
+
+  return {
+    totalCommits: commits.length,
+    repos: [...repos.entries()]
+      .map(([repo, count]) => ({ repo, count }))
+      .sort((a, b) => b.count - a.count || a.repo.localeCompare(b.repo)),
+    commitFrequency,
+    busiestDays,
+    docsOnlyCount,
+    vagueMessageCount,
+    avgFilesPerCommit: filesKnown ? Math.round((filesTotal / filesKnown) * 10) / 10 : null,
+  };
+}
+
+/** Builds the LLM prompt for the profile's activity narrative (grounded in metrics). */
+export function buildProfileSummaryPrompt(activity, { login }) {
+  const reposLine = activity.repos.slice(0, 8).map((r) => `${r.repo}: ${r.count}`).join(', ');
+  const flow = activity.commitFrequency.slice(-10).map((d) => `${d.date}: ${d.count}`).join(', ');
+  return [
+    `You are the Repo Analyst. Write a short narrative (3-5 sentences) about GitHub user ${login}'s recent commit activity, based ONLY on the computed metrics below.`,
+    'Computed from real data (do not invent anything):',
+    `- Commits analyzed: ${activity.totalCommits}`,
+    `- Repositories touched: ${activity.repos.length ? activity.repos.map((r) => r.repo).join(', ') : 'none'}`,
+    `- Commits per repo: ${reposLine || 'none'}`,
+    `- Daily commit flow (most recent up to 10 days): ${flow || 'none'}`,
+    `- Busiest day(s): ${activity.busiestDays.join(', ') || 'none'}`,
+    `- Docs-only commits: ${activity.docsOnlyCount}; vague messages: ${activity.vagueMessageCount}`,
+    `- Average files changed per commit: ${activity.avgFilesPerCommit ?? 'n/a'}`,
+    ``,
+    'Describe the activity patterns (e.g. where the user contributes most, days of peak commit volume, commit-message and doc hygiene) in plain English. Keep it concise.',
+  ].join('\n');
+}
+
 /** Builds the prompt handed to the LLM to produce the plain-English summary. */
 export function buildSummaryPrompt(analysis, { owner, repo }) {
   const contributors = analysis.contributors

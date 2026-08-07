@@ -23,7 +23,7 @@ Individual developers and small teams who want fast, scriptable, CI-friendly che
 - **AC1:** `decode github analyze` (no argument) analyzes the current working repo.
 - **AC2:** `decode github analyze <repo>` analyzes a specified repo.
 - **AC3:** Output includes commit frequency, contributor breakdown, and an AI-generated plain-English summary.
-- **AC4:** `decode github profile` shows the authenticated user's own activity/commit record.
+- **AC4:** `decode github profile` shows the authenticated user's own activity/commit record — a recent commit history across their repos (message, date, files changed) and an AI activity narrative grounded in real computed metrics. The commit table remains visible if the LLM call fails.
 
 ### 3. Documentation Generation & Freshness
 **As a developer**, I want to generate or check documentation for my project, so docs don't silently go stale.
