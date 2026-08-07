@@ -92,7 +92,8 @@ decode-cli/
 │   │   ├── llmClient.js            # wraps calls to the LLM provider/router
 │   │   ├── projectScanner.js       # read-only file tree + key-file sampler
 │   │   ├── repoAnalyst.js          # "Repo Analyst" agent logic
-│   │   └── repoHealth.js           # git-local, token-free repo health check
+│   │   ├── repoHealth.js           # git-local, token-free repo health check
+│   │   └── routeDetector.js        # auto-detects Express routes from source
 │   │
 │   ├── utils/
 │   │   └── output.js               # chalk/table/boxen formatting helpers
@@ -111,7 +112,8 @@ decode-cli/
 │   │   ├── output.test.js
 │   │   ├── projectScanner.test.js
 │   │   ├── repoAnalyst.test.js
-│   │   └── repoHealth.test.js
+│   │   ├── repoHealth.test.js
+│   │   └── routeDetector.test.js
 │   └── integration/                # runs the built CLI binary via execa
 │       ├── api.test.js
 │       ├── audit.test.js
