@@ -14,12 +14,17 @@ const CLI = fileURLToPath(new URL('../../bin/decode.js', import.meta.url));
 const CONFIG_FILE = 'decode.config.json';
 
 let tmp;
+let globalDir;
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-config-it-'));
+  globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-global-it-'));
+  process.env.DECODE_GLOBAL_CONFIG_DIR = globalDir;
 });
 
 afterEach(() => {
+  delete process.env.DECODE_GLOBAL_CONFIG_DIR;
+  fs.rmSync(globalDir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 

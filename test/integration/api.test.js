@@ -39,6 +39,7 @@ const SPEC = {
 let server;
 let baseUrl;
 let tmp;
+let globalDir;
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
@@ -79,9 +80,13 @@ afterAll(() => {
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-api-test-'));
+  globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-global-it-'));
+  process.env.DECODE_GLOBAL_CONFIG_DIR = globalDir;
 });
 
 afterEach(() => {
+  delete process.env.DECODE_GLOBAL_CONFIG_DIR;
+  fs.rmSync(globalDir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 

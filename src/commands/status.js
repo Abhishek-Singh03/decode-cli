@@ -6,23 +6,27 @@
  */
 import { Command } from 'commander';
 
-import { getConnection, getLastAudit } from '../services/configStore.js';
+import { getConnection, getLastAudit, SCOPE_GLOBAL, SCOPE_LOCAL } from '../services/configStore.js';
 import * as output from '../utils/output.js';
 
 export function statusCommand() {
   return new Command('status')
-    .description('Show current connection state')
+    .description('Show current connection state and which config scope each value came from')
     .action(() => {
       try {
         const conn = getConnection();
         const lastAudit = getLastAudit();
+        const withScope = (value, scope) => (value ? `${value} (${scope})` : '—');
         output.printTable(
           ['Setting', 'Value'],
           [
-            ['LLM provider', conn.llmProvider || '—'],
+            ['LLM provider', withScope(conn.llmProvider || null, scopeLabel(conn.llmProviderScope))],
+            ['LLM key', conn.llmConfigured ? `**** (${scopeLabel(conn.llmKeyScope)})` : 'no'],
             ['LLM configured', conn.llmConfigured ? 'yes' : 'no'],
+            ['GitHub token', conn.githubConfigured ? `**** (${scopeLabel(conn.githubKeyScope)})` : 'no'],
             ['GitHub configured', conn.githubConfigured ? 'yes' : 'no'],
             ['Config path', conn.configPath],
+            ['Global config', conn.globalConfigPath],
             ['Last audit', lastAuditLabel(lastAudit)],
           ],
         );
@@ -36,6 +40,10 @@ export function statusCommand() {
         process.exitCode = 1;
       }
     });
+}
+
+function scopeLabel(scope) {
+  return scope === SCOPE_GLOBAL ? 'global' : scope === SCOPE_LOCAL ? 'local' : '—';
 }
 
 function lastAuditLabel(audit) {

@@ -3,13 +3,27 @@
  * `decode init` — interactive setup wizard (PRD story 6, AC1).
  *
  * Prompts for the LLM provider + API key and the GitHub token, then persists
- * via configStore. A flag-based, non-interactive path is provided so the
- * wizard is scriptable in CI/integration tests (AGENTS.md rules 5 & 8).
+ * via configStore. The user picks the config scope:
+ *  - global — written to ~/.decode, applies to every project
+ *  - local  — written to this project's decode.config.json
+ * Default: on a first-ever run (no global config yet) the wizard defaults to
+ * global; once a global setup exists it defaults to local, since repeating
+ * setup per-project is the common case.
+ *
+ * A flag-based, non-interactive path is provided so the wizard is scriptable
+ * in CI/integration tests (AGENTS.md rules 5 & 8), plus `--scope` to choose
+ * the tier without prompting.
  */
 import inquirer from 'inquirer';
 import { Command } from 'commander';
+import { existsSync } from 'node:fs';
 
-import { saveConnection } from '../services/configStore.js';
+import {
+  getGlobalConfigPath,
+  saveConnection,
+  SCOPE_GLOBAL,
+  SCOPE_LOCAL,
+} from '../services/configStore.js';
 import * as output from '../utils/output.js';
 
 export function initCommand() {
@@ -18,20 +32,54 @@ export function initCommand() {
     .option('--llm-provider <name>', 'LLM provider name (skips prompt)')
     .option('--llm-api-key <key>', 'LLM provider API key (skips prompt)')
     .option('--github-token <token>', 'GitHub personal access token (skips prompt)')
+    .option('--scope <global|local>', 'Config scope to write to (defaults: global on first run, then local)')
     .action(async (opts) => {
       try {
+        const scope = await resolveScope(opts);
         const answers = await gatherCredentials(opts);
-        saveConnection({
-          llmProvider: answers.llmProvider,
-          llmApiKey: answers.llmApiKey,
-          githubToken: answers.githubToken,
-        });
-        output.success('DeCode is configured. Run `decode status` to verify.');
+        saveConnection(
+          {
+            llmProvider: answers.llmProvider,
+            llmApiKey: answers.llmApiKey,
+            githubToken: answers.githubToken,
+          },
+          { scope },
+        );
+        output.success(`DeCode is configured (${scope}). Run \`decode status\` to verify.`);
       } catch (err) {
         output.error(`init failed: ${err.message}`);
         process.exitCode = 1;
       }
     });
+}
+
+/** Default scope heuristic + optional interactive prompt. */
+async function resolveScope(flags) {
+  if (flags.scope) {
+    if (flags.scope !== SCOPE_GLOBAL && flags.scope !== SCOPE_LOCAL) {
+      throw new Error('--scope must be "global" or "local".');
+    }
+    return flags.scope;
+  }
+  const globalExists = existsSync(getGlobalConfigPath());
+  const defaultScope = globalExists ? SCOPE_LOCAL : SCOPE_GLOBAL;
+
+  const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  if (!interactive) return defaultScope;
+
+  const { scope } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'scope',
+      message: 'Where should this configuration apply?',
+      default: defaultScope,
+      choices: [
+        { name: 'Global — all projects on this machine', value: SCOPE_GLOBAL },
+        { name: 'Local — this project only', value: SCOPE_LOCAL },
+      ],
+    },
+  ]);
+  return scope;
 }
 
 /**

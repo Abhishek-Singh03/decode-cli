@@ -39,9 +39,14 @@ Config Store  LLM Client  GitHub Client
 ```
 
 ## Data Model
-- **Config store** (`decode.config.json`, project-level; `~/.decode/config.json`, global): stores LLM provider + key reference, GitHub token reference, configured API routes, user preferences.
-- **Credentials**: never stored in plaintext in the repo; read from `.env` locally or OS keychain where feasible. `.env.example` documents required variables.
-- **No database** — DeCode is stateless between runs beyond the config file; each command reads fresh data (API responses, GitHub API data, filesystem) at call time.
+- **Two-tier config store** — DeCode resolves configuration from two scopes and merges them **field-by-field** (never all-or-nothing):
+  - **Global** (`~/.decode/config.json`): machine-wide, set once and applies to every project by default. Its secrets live in `~/.decode/.env`.
+  - **Local** (`<project-root>/decode.config.json`, optional): only the fields explicitly set locally override the global value; anything not set falls back to global, then to defaults. Secrets live in `<project-root>/.env`.
+  - The project root is found by walking upward from the working directory to the nearest `decode.config.json` (mirrors how git finds `.git`), so commands run from a subdirectory still resolve the project-local config.
+  - `decode init` picks the scope (defaults to global on a first-ever run, local once a global setup exists); `decode config set/list/reset` take `--global` / `--local`; `decode status` labels each credential with the scope it came from.
+- **Config shape** — the merged config stores the LLM provider + key reference, the GitHub token reference, configured API routes, and user preferences (`updatedAt`, last audit summary, cached route scan).
+- **Credentials**: never stored in plaintext in the repo; read from `.env` (local or global tier) or OS keychain where feasible. `.env.example` documents required variables.
+- **No database** — DeCode is stateless between runs beyond the config files; each command reads fresh data (API responses, GitHub API data, filesystem) at call time.
 
 ## Command Modules
 - `api` — route management (`list`/`add`/`remove`) and health checking (`check [routes...]`) against configured or provided routes

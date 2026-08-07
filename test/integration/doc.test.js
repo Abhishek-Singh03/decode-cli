@@ -19,6 +19,7 @@ const CANNED_EXPLAIN = 'This project is a demo CLI.';
 let server;
 let baseUrl;
 let tmp;
+let globalDir;
 
 beforeAll(async () => {
   server = http.createServer((req, res) => {
@@ -51,6 +52,8 @@ afterAll(() => {
 
 beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-doc-it-'));
+  globalDir = fs.mkdtempSync(path.join(os.tmpdir(), 'decode-global-it-'));
+  process.env.DECODE_GLOBAL_CONFIG_DIR = globalDir;
   // minimal project for the scanner + staleness check
   fs.mkdirSync(path.join(tmp, 'src'), { recursive: true });
   fs.writeFileSync(path.join(tmp, 'package.json'), '{"name":"demo","version":"1.0.0"}');
@@ -58,6 +61,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.DECODE_GLOBAL_CONFIG_DIR;
+  fs.rmSync(globalDir, { recursive: true, force: true });
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
