@@ -1,6 +1,6 @@
 # DeCode
 
-AI-powered developer productivity CLI — check your API health, understand your GitHub activity, generate documentation, and get AI-assisted code edits, all from the terminal, with a human approving every change.
+AI-powered developer productivity CLI — check your API health, understand your GitHub activity, generate documentation, and run a composite health audit, all from the terminal. (AI-assisted code edits are on the roadmap.)
 
 Built for **Deploy or Die: HowToAlgo x GDGoC KIIT Hackathon** (Track B — Developer Productivity Tools).
 
@@ -28,7 +28,7 @@ decode audit           # run a full check: API health + doc freshness + repo hea
 | `decode init` | Interactive setup wizard |
 | `decode connect <api-key>` | Store an LLM/API provider key |
 | `decode disconnect` | Remove stored credentials |
-| `decode status` | Show connection status, last audit result, config path |
+| `decode status` | Show connection state and config path |
 | `decode config list [--json] / set <key> <value> / reset [--yes]` | View or update configuration (no secrets; `reset` keeps `.env` credentials) |
 | `decode audit [--ci] [--json]` | Run all core checks together |
 | `decode api list` | List configured API routes |
@@ -41,21 +41,15 @@ decode audit           # run a full check: API health + doc freshness + repo hea
 | `decode doc [message] [--yes] [--dry-run] [--out <path>]` | Generate project documentation (previewed and approval-gated before writing) |
 | `decode doc --explain [instruction]` | Explain the project or a specific part (read-only) |
 | `decode doc check [--json]` | Check if docs are stale (exit 1 when stale) |
-| `decode ask <question>` | Ask a read-only question about the project |
-| `decode <natural language instruction>` | AI assistant — proposes a diff, asks for approval before writing |
 
 Run `decode help` for the full list at any time.
 
-## How the AI Assistant Works
+## Roadmap
 
-Any input that isn't a recognized command is treated as a natural-language coding instruction:
+- Natural-language AI code edits — describe a change in plain English, review a proposed diff, approve with `y` before anything is written
+- `decode ask` — read-only Q&A about your project
 
-```bash
-decode add error handling to the auth route
-decode fix this --file auth.js --lines 20-45
-```
-
-The agent reads the relevant file(s), proposes a diff, and asks for explicit approval before writing anything to disk. Nothing is changed without a `y`.
+Neither is implemented yet.
 
 ## Architecture
 

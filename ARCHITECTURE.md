@@ -1,14 +1,14 @@
 # DeCode — Architecture
 
 ## Overview
-DeCode (`decode-cli`) is a Node.js CLI that gives developers four core capabilities from the terminal: API health checking, GitHub activity analysis, documentation generation, and an AI-assisted code editing flow — all gated by human approval before any file is written.
+DeCode (`decode-cli`) is a Node.js CLI that gives developers core capabilities from the terminal: API health checking, GitHub activity analysis, documentation generation, and a composite audit that summarizes all of them. Any file writes are gated by human approval; an AI-assisted code editing flow (PRD story 5) is planned but not yet implemented.
 
 ## Stack
 - **Runtime:** Node.js (>=18)
 - **CLI framework:** `commander`
 - **Terminal UI:** `chalk` (color), `cli-table3` (tables), `ora` (spinners), `boxen` (summary panels), `inquirer` (interactive prompts)
 - **GitHub integration:** `octokit` (REST/GraphQL)
-- **LLM integration:** routed via [provider/router name] through Claude Code during development; runtime calls go through the configured provider in `decode.config.json`
+- **LLM integration:** runtime calls go through the provider configured in `decode.config.json` (anthropic / openai / groq / other), via `src/services/llmClient.js`
 - **Testing:** `vitest` (unit), `execa`-driven CLI integration tests
 - **Linting:** ESLint
 
@@ -22,12 +22,13 @@ CLI Entry (bin/decode.js)
         │
    ┌────┴─────────────────────────┐
    │                               │
-Matched command             Unmatched input
-   │                               │
-   ▼                               ▼
-Command Modules              AI Agent Fallback
-(api, github, doc,           (natural-language
- audit, config, etc.)         instruction handler)
+Matched command             Unmatched input (planned —
+   │                         not yet implemented)
+   ▼                               │
+Command Modules                    ▼
+(api, github, doc,           AI Agent Fallback
+ audit, config, etc.)         (natural-language
+                                instruction handler)
    │                               │
    └───────────┬───────────────────┘
                ▼
@@ -43,13 +44,12 @@ Config Store  LLM Client  GitHub Client
 - **No database** — DeCode is stateless between runs beyond the config file; each command reads fresh data (API responses, GitHub API data, filesystem) at call time.
 
 ## Command Modules
-- `api` — route checking against a configured or provided route list
-- `github` — repo/profile activity analysis via GitHub API
-- `doc` — documentation generation and staleness checking
-- `audit` — composes `api check` + `doc check` + repo health check into one summary
-- `config` / `connect` / `disconnect` / `status` / `init` — account and settings lifecycle
-- `ask` — read-only Q&A about the project, no file writes
-- **AI Agent Fallback** — any unmatched input is treated as a natural-language coding instruction; proposes a diff, requires explicit `y/n` approval before writing to disk, sandboxed to the current project directory
+- `api` — route management (`list`/`add`/`remove`) and health checking (`check [routes...]`) against configured or provided routes
+- `github` — repo/profile activity analysis via GitHub API (`connect`/`profile`/`analyze`)
+- `doc` — documentation generation (`doc [message]`, `doc --explain`) and staleness checking (`doc check`)
+- `audit` — composes the API, docs, and repo-health checks into one summary (`--json` / `--ci`)
+- `init` / `connect` / `disconnect` / `status` / `config` — account and settings lifecycle
+- **Planned (not yet implemented):** `ask` (read-only Q&A) and the AI Agent Fallback (natural-language code edits, PRD story 5)
 
 ## Folder Structure
 
@@ -71,44 +71,55 @@ decode-cli/
 │   │   ├── connect.js
 │   │   ├── disconnect.js
 │   │   ├── status.js
-│   │   ├── config.js               # handles `config list/set/reset`
-│   │   ├── api.js                  # handles `api list`, `api check`
+│   │   ├── api.js                  # handles `api list/add/remove/check`
 │   │   ├── github.js               # handles `github connect/profile/analyze`
 │   │   ├── doc.js                  # handles `doc`, `doc --explain`, `doc check`
-│   │   ├── audit.js
-│   │   ├── ask.js
-│   │   └── agent.js                # natural-language fallback handler
+│   │   ├── config.js               # handles `config list/set/reset`
+│   │   └── audit.js                # composite audit summary
 │   │
 │   ├── services/                   # actual logic, reused across commands
-│   │   ├── llmClient.js            # wraps calls to the LLM provider/router
-│   │   ├── githubClient.js         # wraps octokit calls
 │   │   ├── apiChecker.js           # "API Contract Verifier" skill logic
+│   │   ├── auditRunner.js          # composes api + docs + repo checks
+│   │   ├── configStore.js          # reads/writes decode.config.json + .env
 │   │   ├── docGenerator.js         # "Doc Generator" skill logic
+│   │   ├── docStaleness.js         # mtime-based doc staleness heuristic
+│   │   ├── githubClient.js         # wraps octokit calls
+│   │   ├── llmClient.js            # wraps calls to the LLM provider/router
+│   │   ├── projectScanner.js       # read-only file tree + key-file sampler
 │   │   ├── repoAnalyst.js          # "Repo Analyst" agent logic
-│   │   ├── configStore.js          # reads/writes decode.config.json
-│   │   └── sandbox.js              # enforces the file-write safety boundary
+│   │   └── repoHealth.js           # git-local, token-free repo health check
 │   │
 │   ├── utils/
-│   │   ├── output.js               # chalk/table/boxen formatting helpers
-│   │   ├── diff.js                 # diff generation + colorized display
-│   │   └── logger.js               # verbose/debug logging
+│   │   └── output.js               # chalk/table/boxen formatting helpers
 │   │
-│   └── constants.js                # command names, exit codes, config defaults
+│   └── constants.js                # CLI name/version, timeout, exit codes
 │
 ├── test/
 │   ├── unit/                       # hits services directly
 │   │   ├── apiChecker.test.js
-│   │   ├── githubClient.test.js
+│   │   ├── auditRunner.test.js
 │   │   ├── configStore.test.js
-│   │   └── diff.test.js
+│   │   ├── docGenerator.test.js
+│   │   ├── docStaleness.test.js
+│   │   ├── githubClient.test.js
+│   │   ├── llmClient.test.js
+│   │   ├── output.test.js
+│   │   ├── projectScanner.test.js
+│   │   ├── repoAnalyst.test.js
+│   │   └── repoHealth.test.js
 │   └── integration/                # runs the built CLI binary via execa
 │       ├── api.test.js
-│       ├── github.test.js
+│       ├── audit.test.js
+│       ├── cli.test.js
+│       ├── config.test.js
+│       ├── connect.test.js
 │       ├── doc.test.js
-│       └── audit.test.js
+│       ├── github.test.js
+│       └── init.test.js
 │
-├── docs/                           # generated output lands here when a user
-│   └── .gitkeep                    # runs `decode doc` — separate from project docs below
+├── docs/                           # generated output (docs/architecture.md) —
+│   └── architecture.md             # written by `decode doc`, separate from the
+│                                   # hand-written project docs below
 │
 ├── .env.example
 ├── .gitignore
@@ -117,7 +128,6 @@ decode-cli/
 ├── AGENTS.md                       # agent rules/constitution
 ├── AGENTS_AND_SKILLS.md
 ├── PRD.md
-├── TASKS.md
 ├── CHANGELOG.md
 ├── LICENSE
 ├── README.md
@@ -125,14 +135,12 @@ decode-cli/
 ```
 
 **Design rationale for the split:**
-- `commands/` vs `services/` keeps command handlers thin and testable, and keeps the actual agent/API/GitHub logic independently unit-testable without spinning up the CLI parser.
-- `agent.js` lives in `commands/` even though it isn't a named subcommand — it's still the handler `index.js` routes unmatched input to, so it belongs alongside the others structurally.
-- `sandbox.js` is isolated from `agent.js` deliberately — it's the safety boundary referenced below, and keeping it as its own module makes it independently testable and easy to point to directly when explaining safety guarantees.
+- `commands/` vs `services/` keeps command handlers thin and testable, and keeps the actual API/GitHub/doc/repo logic independently unit-testable without spinning up the CLI parser.
 - `docs/` (generated output) is kept separate from the hand-written project docs at repo root, so DeCode's own generated architecture doc never collides with this one.
 
 ## Security & Safety Boundaries
-- Agent file operations are restricted to the current working project directory — no arbitrary filesystem or shell access.
-- No AI-proposed change is ever written without explicit human approval.
+- Any AI-proposed file write (planned assistant, PRD story 5) is restricted to the current working project directory — no arbitrary filesystem or shell access.
+- No proposed change is ever written without explicit human approval.
 - API keys/tokens are read from environment/config, never hardcoded or committed.
 
 ## Testing Strategy
