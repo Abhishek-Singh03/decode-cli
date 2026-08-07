@@ -16,7 +16,7 @@ import ora from 'ora';
 import {
   getAuthenticatedUser,
   getGithubClient,
-  getRepoCommits,
+  getRepoCommitsDetailed,
   listReposForUser,
   detectCurrentRepo,
   resolveRepoArg,
@@ -135,7 +135,7 @@ function analyzeCommand() {
         const spinner = process.stdout.isTTY ? ora(`Analyzing ${owner}/${repo}...`).start() : null;
         let commits;
         try {
-          commits = await getRepoCommits(client, { owner, repo });
+          commits = await getRepoCommitsDetailed(client, { owner, repo });
         } finally {
           if (spinner) spinner.stop();
         }
@@ -198,6 +198,9 @@ function printHumanResults({ owner, repo }, analysis, summary, commits) {
       .join('  '),
   );
 
+  // Heuristic summary is real local signal — always shown, even if the LLM fails.
+  printCommitHygiene(analysis.quality, analysis.totalCommits);
+
   if (summary) {
     output.printBox('Summary', summary, { borderColor: 'magenta' });
   } else if (!isLlmConfigured()) {
@@ -207,4 +210,21 @@ function printHumanResults({ owner, repo }, analysis, summary, commits) {
   if (commits.length >= 500) {
     output.warning('Showing only the most recent ~500 commits.');
   }
+}
+
+function printCommitHygiene(quality, totalCommits) {
+  if (!quality) return;
+  output.heading('Commit hygiene');
+  output.dim(`Docs-only commits: ${quality.docsOnlyCount} of ${totalCommits}`);
+  output.dim(`Vague / low-quality messages: ${quality.vagueMessageCount}`);
+  output.dim(
+    `Commit sizes: avg ${quality.avgSize ?? 'n/a'} lines${quality.maxSize != null ? `, largest ${quality.maxSize}` : ''} ` +
+      `(over ${quality.scanned} commits with file stats)`,
+  );
+  if (quality.outliers.length > 0) {
+    output.dim(`Size outliers: ${quality.outliers.map((o) => `${o.sha.slice(0, 8)} (+${o.size})`).join(', ')}`);
+  }
+  output.dim(
+    `Commit bursts: ${quality.bursts.length ? quality.bursts.map((b) => `${b.date} (${b.count})`).join(', ') : 'none'}`,
+  );
 }

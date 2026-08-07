@@ -65,6 +65,50 @@ export async function getRepoCommits(client, { owner, repo }, options = {}) {
   return commits.slice(0, limit);
 }
 
+/**
+ * Fetches a repo's commits AND enriches the newest ones with file stats, so
+ * the Repo Analyst can compute docs-only / commit-size heuristics. The list
+ * endpoint does not include per-commit files, so each enriched commit gets one
+ * extra `GET /commits/{sha}` request (bounded, concurrency-limited). Commits
+ * whose detail can't be fetched are kept as-is — heuristics degrade gracefully.
+ */
+export async function getRepoCommitsDetailed(client, { owner, repo }, options = {}) {
+  const { limit = 500, enrichLimit = 100 } = options;
+  const commits = await getRepoCommits(client, { owner, repo }, { limit });
+  return enrichCommits(client, commits, { owner, repo, enrichLimit });
+}
+
+/** Adds `files` + `stats` to the newest `enrichLimit` commits. */
+export async function enrichCommits(client, commits, { owner, repo, enrichLimit = 100 } = {}) {
+  const head = commits.slice(0, enrichLimit);
+  const detailed = await mapConcurrent(head, 8, async (commit) => {
+    if (commit.files || commit.stats) return commit; // already has detail
+    try {
+      const { data } = await client.rest.repos.getCommit({ owner, repo, ref: commit.sha });
+      return { ...commit, files: data.files, stats: data.stats };
+    } catch {
+      return commit; // unauthorized/not found — keep the list-entry as-is
+    }
+  });
+  return [...detailed, ...commits.slice(enrichLimit)];
+}
+
+/** Runs `mapper` over `items` with bounded concurrency, preserving order. */
+async function mapConcurrent(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      // eslint-disable-next-line no-await-in-loop
+      results[index] = await mapper(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export async function listReposForUser(client, { login, limit = 10 }) {
   const { data } = await client.rest.repos.listForUser({ username: login, per_page: limit, sort: 'pushed' });
   return data;

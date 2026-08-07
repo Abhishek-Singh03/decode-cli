@@ -11,8 +11,10 @@ import path from 'node:path';
 
 import {
   createGithubClient,
+  enrichCommits,
   getGithubClient,
   getRepoCommits,
+  getRepoCommitsDetailed,
   resolveRepoArg,
   detectCurrentRepo,
 } from '../../src/services/githubClient.js';
@@ -100,5 +102,57 @@ describe('getRepoCommits', () => {
     };
     const commits = await getRepoCommits(fake, { owner: 'a', repo: 'b' }, { limit: 500 });
     expect(commits).toHaveLength(12);
+  });
+});
+
+describe('getRepoCommitsDetailed / enrichCommits', () => {
+  it('attaches files + stats to the newest commits', async () => {
+    const commits = [
+      { sha: 's1', commit: { message: 'a' } },
+      { sha: 's2', commit: { message: 'b' } },
+      { sha: 's3', commit: { message: 'c' } },
+    ];
+    const detailBySha = {
+      s1: { files: [{ filename: 'src/x.js', additions: 2, deletions: 1 }], stats: { additions: 2, deletions: 1 } },
+      s2: { files: [{ filename: 'docs/readme.md' }] },
+    };
+    const fake = {
+      rest: {
+        repos: {
+          getCommit: async ({ ref }) =>
+            detailBySha[ref]
+              ? { data: detailBySha[ref] }
+              : Promise.reject(new Error('not found')),
+        },
+      },
+    };
+
+    const enriched = await enrichCommits(fake, commits, { owner: 'a', repo: 'b', enrichLimit: 3 });
+    expect(enriched[0].files).toEqual([{ filename: 'src/x.js', additions: 2, deletions: 1 }]);
+    expect(enriched[1].files).toEqual([{ filename: 'docs/readme.md' }]);
+    // s3 had no detail (getCommit rejected) → kept as the plain list commit
+    expect(enriched[2].sha).toBe('s3');
+    expect(enriched[2].files).toBeUndefined();
+    expect(enriched).toHaveLength(3);
+  });
+
+  it('getRepoCommitsDetailed composes list + enrichment', async () => {
+    const commits = [{ sha: 's1' }, { sha: 's2' }];
+    const fake = {
+      paginate: async () => commits,
+      rest: {
+        repos: {
+          listCommits: 'endpoint-method',
+          getCommit: async ({ ref }) => {
+            if (ref === 's1') return { data: { files: [{ filename: 'src/a.js', additions: 1 }] } };
+            throw new Error('nope');
+          },
+        },
+      },
+    };
+    const detailed = await getRepoCommitsDetailed(fake, { owner: 'a', repo: 'b' }, { enrichLimit: 5 });
+    expect(detailed).toHaveLength(2);
+    expect(detailed[0].files[0].filename).toBe('src/a.js');
+    expect(detailed[1].files).toBeUndefined();
   });
 });

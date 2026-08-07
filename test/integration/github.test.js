@@ -73,6 +73,10 @@ beforeAll(async () => {
     if (pathname === '/user') send(200, USER);
     else if (pathname === '/users/octocat/repos') send(200, REPOS);
     else if (pathname === '/repos/mock-owner/mock-repo/commits') send(200, COMMITS);
+    else if (pathname.startsWith('/repos/mock-owner/mock-repo/commits/')) {
+      const sha = pathname.split('/').pop();
+      send(200, { sha, files: [{ filename: 'docs/readme.md', additions: 2, deletions: 0 }], stats: { total: 2 } });
+    }
     else send(404, { message: 'not found' });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -173,6 +177,8 @@ describe('decode github analyze', () => {
       { login: 'ada', count: 2 },
       { login: 'grace', count: 1 },
     ]);
+    // The mock exposes file stats, so the quality heuristics are computed.
+    expect(parsed.analysis.quality.docsOnlyCount).toBe(3);
     expect(parsed.summary).toBeNull(); // no LLM configured
   });
 
