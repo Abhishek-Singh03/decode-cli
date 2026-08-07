@@ -18,6 +18,7 @@ import { apiCommand } from './commands/api.js';
 import { githubCommand } from './commands/github.js';
 import { docCommand } from './commands/doc.js';
 import { configCommand } from './commands/config.js';
+import { auditCommand } from './commands/audit.js';
 
 const program = new Command();
 
@@ -33,6 +34,7 @@ program
   .addCommand(apiCommand())
   .addCommand(githubCommand())
   .addCommand(docCommand())
-  .addCommand(configCommand());
+  .addCommand(configCommand())
+  .addCommand(auditCommand());
 
 program.parse();
