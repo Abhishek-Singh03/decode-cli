@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.log
+.decode/
+docs/*
+!docs/.gitkeep

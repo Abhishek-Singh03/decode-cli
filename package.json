@@ -1,0 +1,38 @@
+{
+  "name": "decode-cli",
+  "version": "0.1.0",
+  "description": "AI-powered developer productivity CLI — API health checks, GitHub activity analysis, documentation generation, and AI-assisted code edits with human approval.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "decode": "bin/decode.js"
+  },
+  "files": [
+    "bin",
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "node bin/decode.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "boxen": "^8.0.0",
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^12.1.0",
+    "inquirer": "^9.2.23",
+    "octokit": "^3.1.0",
+    "ora": "^8.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "execa": "^8.0.1",
+    "vitest": "^3.2.7"
+  }
+}
