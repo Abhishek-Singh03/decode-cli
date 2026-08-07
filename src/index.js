@@ -19,6 +19,7 @@ import { githubCommand } from './commands/github.js';
 import { docCommand } from './commands/doc.js';
 import { configCommand } from './commands/config.js';
 import { auditCommand } from './commands/audit.js';
+import { renderLandingScreen } from './commands/help.js';
 
 const program = new Command();
 
@@ -36,5 +37,17 @@ program
   .addCommand(docCommand())
   .addCommand(configCommand())
   .addCommand(auditCommand());
+
+// Override default help with custom landing screen
+program.addHelpCommand(false);
+program.on('--help', () => {
+  renderLandingScreen();
+});
+
+// Show landing screen when no command is provided
+if (process.argv.length === 2) {
+  renderLandingScreen();
+  process.exit(0);
+}
 
 program.parse();
