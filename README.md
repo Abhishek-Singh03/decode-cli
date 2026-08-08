@@ -7,10 +7,10 @@ Built for **Deploy or Die: HowToAlgo x GDGoC KIIT Hackathon** (Track B — Devel
 ## Install
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/s8tn2546/decode-cli/
 cd decode-cli
 npm install
-npm link   # makes the `decode` command available globally for local testing
+sudo npm link   # makes the `decode` command available globally for local testing
 ```
 
 ## Quick Start
