@@ -165,5 +165,14 @@ CHANGELOG.md for user-facing notes).
   **Not pushed** — the tag must be pushed by the user with `git push origin v0.1.0`.
 
 ## Final pass verification
-- `npm test` still green (documentation/config changes are non-code).
-- `npm run lint` still green.
+- `npm test` — **20 files, 170 tests, all passing** (also confirms the doc/config
+  changes broke nothing).
+- `npm run lint` — clean (exit 0).
+- During final verification a test-hermeticity gap surfaced: the developer's own
+  `~/.decode` global config (created with `decode init`, i.e. the feature itself)
+  leaked into unit tests that read config without isolating the global tier —
+  and one test fired a real LLM request. Fixed by a Vitest `setupFiles`
+  (`test/setup.js`) that points `DECODE_GLOBAL_CONFIG_DIR` at an empty temp dir
+  for every run, bumping the integration `testTimeout` to 60s, and correcting a
+  `resolveBackendBaseUrl` unit test that injected its fake `fetchImpl` in the
+  wrong position.
