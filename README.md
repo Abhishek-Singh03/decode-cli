@@ -28,8 +28,8 @@ decode audit           # run a full check: API health + doc freshness + repo hea
 | `decode init` | Interactive setup wizard |
 | `decode connect <api-key>` | Store an LLM/API provider key |
 | `decode disconnect` | Remove stored credentials |
-| `decode status` | Show connection state and config path |
-| `decode config list [--json] / set <key> <value> / reset [--yes]` | View or update configuration (no secrets; `reset` keeps `.env` credentials) |
+| `decode status` | Show connection state, which config scope each credential came from, and config paths |
+| `decode config list [--json] / set <key> <value> [--global\|--local] / reset [--yes] [--global\|--local]` | View or update configuration (no secrets; `reset` keeps `.env` credentials). Global config at `~/.decode`, local overrides it per-field |
 | `decode audit [--ci] [--json]` | Run all core checks together |
 | `decode api list [--refresh] [--json]` | Auto-detect backend routes from the project source (Express today); dynamic-segment routes are flagged |
 | `decode api check [paths...] [--base-url <url>] [--spec <path\|url>] [--json] [--ci]` | Check detected routes against a live backend (base from `--base-url` / `PORT` / common dev ports); dynamic routes are skipped, not requested |
@@ -60,10 +60,13 @@ See [`AGENTS_AND_SKILLS.md`](./AGENTS_AND_SKILLS.md) for the custom agent and sk
 ## Development
 
 ```bash
-npm run dev      # run the CLI locally
+npm run dev      # run the CLI
 npm test         # run the test suite
 npm run lint     # lint the codebase
 ```
+
+DeCode is a CLI, not a web app, so it ships no Playwright browser tests. Unittest cases (`vitest`) plus execa-driven CLI integration tests exercise the real shipped binary end-to-end instead — the same gate a browser harness would provide, minus the browser. See
+[`ARCHITECTURE.md`](./ARCHITECTURE.md#testing-strategy).
 
 ## License
 

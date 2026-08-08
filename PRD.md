@@ -39,7 +39,7 @@ Individual developers and small teams who want fast, scriptable, CI-friendly che
 - **AC1:** `decode audit` runs API check + doc check + repo health check and returns one combined pass/fail summary.
 - **AC2:** `decode audit --ci` returns a CI-friendly exit code reflecting overall pass/fail.
 
-### 5. AI Assistant (Natural-Language Code Edits)
+### 5. AI Assistant (Natural-Language Code Edits) — **Planned, not yet implemented**
 **As a developer**, I want to describe a code change in plain English and have the AI propose it, so I can move faster without memorizing a command syntax.
 
 - **AC1:** Any input not matching a known command is routed to the AI assistant.
@@ -47,12 +47,17 @@ Individual developers and small teams who want fast, scriptable, CI-friendly che
 - **AC3:** `--file`/`--lines` flags scope the edit to a specific location.
 - **AC4:** File operations are restricted to the current project directory only.
 
+*(Status: designed but not built Day 1 — see ARCHITECTURE.md "Planned" and README.md "Roadmap".)*
+
 ### 6. Setup & Account Management
 **As a new user**, I want a guided setup, so I can start using the tool without reading documentation first.
 
 - **AC1:** `decode init` walks through connecting an LLM provider and GitHub, and writes a config file.
-- **AC2:** `decode status` shows current connection state and last audit result.
+- **AC2:** `decode status` shows current connection state, the config scope in use for each credential, and the last audit result.
 - **AC3:** `decode connect`/`disconnect` manage credentials without re-running full setup.
+- **AC4 (config scoping):** DeCode supports a machine-wide config (`~/.decode/config.json`) and an optional per-project config (`<project-root>/decode.config.json`); local values override global values **field-by-field**, and anything unset locally falls back to global.
+- **AC5 (config scoping):** `decode init` asks whether the setup applies globally (all projects) or to the current project only — defaulting to global on a first-ever run, and to local once a global setup exists.
+- **AC6 (config scoping):** `decode config set <key> <value> --global|--local` targets a single tier, `decode config list` labels each value's source (`local` / `global` / `default`), and `decode config reset --global` / `--local` clears only that scope.
 
 ## Out of Scope (Day 1)
 - Visual flowchart/box representation of agent actions (terminal trace only)

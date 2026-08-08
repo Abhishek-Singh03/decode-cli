@@ -1,16 +1,18 @@
 # DeCode — Architecture
 
 ## Overview
-DeCode (`decode-cli`) is a Node.js CLI that gives developers core capabilities from the terminal: API health checking, GitHub activity analysis, documentation generation, and a composite audit that summarizes all of them. Any file writes are gated by human approval; an AI-assisted code editing flow (PRD story 5) is planned but not yet implemented.
+DeCode (`decode-cli`) is a Node.js CLI that gives developers core capabilities from the terminal: auto-detected API health checking, GitHub activity analysis, documentation generation, and a composite audit that summarizes all of them. Any file writes are gated by human approval; an AI-assisted code editing flow (PRD story 5) is planned but not yet implemented.
 
 ## Stack
 - **Runtime:** Node.js (>=18)
-- **CLI framework:** `commander`
-- **Terminal UI:** `chalk` (color), `cli-table3` (tables), `ora` (spinners), `boxen` (summary panels), `inquirer` (interactive prompts)
+- **CLI framework:** `commander` (argument parsing + `.showSuggestionAfterError()` for near-miss subcommands)
+- **Terminal output:** `chalk` (color), `cli-table3` (tables), `ora` (spinners), `boxen` (summary panels), `inquirer` (interactive prompts)
+- **Rendering engine (`src/ui/`):** a composable screen-rendering layer (renderer → components → theme) used by the `audit` command and the custom landing screen. See [`src/ui/README.md`](src/ui/README.md), [`src/ui/ENGINE.md`](src/ui/ENGINE.md), and the full build report [`src/ui/RENDERING_ENGINE_COMPLETE.md`](src/ui/RENDERING_ENGINE_COMPLETE.md).
 - **GitHub integration:** `octokit` (REST/GraphQL)
-- **LLM integration:** runtime calls go through the provider configured in `decode.config.json` (anthropic / openai / groq / other), via `src/services/llmClient.js`
+- **LLM integration:** runtime calls go through the provider configured in the merged config (anthropic / openai / groq / other), via `src/services/llmClient.js`
 - **Testing:** `vitest` (unit), `execa`-driven CLI integration tests
 - **Linting:** ESLint
+- **Config:** a two-tier JSON config store — see [Data Model](#data-model)
 
 ## High-Level Design
 
@@ -28,14 +30,16 @@ Matched command             Unmatched input (planned —
 Command Modules                    ▼
 (api, github, doc,           AI Agent Fallback
  audit, config, etc.)         (natural-language
-                                instruction handler)
-   │                               │
-   └───────────┬───────────────────┘
-               ▼
-        Shared Services
-   ┌───────────┼────────────┐
-   ▼           ▼            ▼
-Config Store  LLM Client  GitHub Client
+   │                            instruction handler)
+   │
+   ▼
+Shared Services
+┌───────────┼────────────┐
+▼           ▼            ▼
+Config      LLM         GitHub
+Store       Client      Client
+▼
+Rendering Engine (src/ui/) — used by audit + landing screen
 ```
 
 ## Data Model
@@ -44,119 +48,84 @@ Config Store  LLM Client  GitHub Client
   - **Local** (`<project-root>/decode.config.json`, optional): only the fields explicitly set locally override the global value; anything not set falls back to global, then to defaults. Secrets live in `<project-root>/.env`.
   - The project root is found by walking upward from the working directory to the nearest `decode.config.json` (mirrors how git finds `.git`), so commands run from a subdirectory still resolve the project-local config.
   - `decode init` picks the scope (defaults to global on a first-ever run, local once a global setup exists); `decode config set/list/reset` take `--global` / `--local`; `decode status` labels each credential with the scope it came from.
-- **Config shape** — the merged config stores the LLM provider + key reference, the GitHub token reference, configured API routes, and user preferences (`updatedAt`, last audit summary, cached route scan).
-- **Credentials**: never stored in plaintext in the repo; read from `.env` (local or global tier) or OS keychain where feasible. `.env.example` documents required variables.
+- **Config shape** — the merged config stores the LLM provider + key reference, the GitHub token reference, user state (`updatedAt`, last audit summary), and the **cached route-scan result** (routes are always auto-detected from source, never hand-entered). The committed template is `decode.config.example.json`; local `decode.config.json` is gitignored runtime state.
+- **Credentials:** never stored in plaintext in the repo; read from `.env` (local or global tier) or OS keychain where feasible. `.env.example` documents required variables.
 - **No database** — DeCode is stateless between runs beyond the config files; each command reads fresh data (API responses, GitHub API data, filesystem) at call time.
 
 ## Command Modules
-- `api` — auto-detected route discovery (`list`, cached in the project config with `--refresh`) and health checking (`check`) against a live backend. Routes are detected from the project's Express source (`src/services/routeDetector.js`); dynamic-segment routes are flagged / skipped rather than guessed. The manual `add`/`remove` flow no longer exists
-- `github` — repo/profile activity analysis via GitHub API (`connect`/`profile`/`analyze`)
-- `doc` — documentation generation (`doc [message]`, `doc --explain`) and staleness checking (`doc check`)
-- `audit` — composes the API, docs, and repo-health checks into one summary (`--json` / `--ci`)
-- `init` / `connect` / `disconnect` / `status` / `config` — account and settings lifecycle
-- **Planned (not yet implemented):** `ask` (read-only Q&A) and the AI Agent Fallback (natural-language code edits, PRD story 5)
+- `api` — auto-detected route discovery (`list`, cached in the project config with `--refresh`) and health checking (`check`) against a live backend. Routes come from scanning the project's Express source (`src/services/routeDetector.js`); dynamic-segment routes are flagged in `list` and skipped in `check` rather than guessed. Base URL resolution: `--base-url` → `PORT` in `.env` → reachable common dev port. The manual `add`/`remove` flow no longer exists.
+- `github` — account + activity analysis via GitHub API (`connect`/`profile`/`analyze`). `analyze` reports commit health heuristics (docs-only, vague messages, size outliers, bursts) that ground the AI summary; `profile` shows recent commit history across the user's repos plus an AI activity narrative.
+- `doc` — documentation generation (`doc [message]`, `doc --explain`) and staleness checking (`doc check`).
+- `audit` — composes the API, docs, and repo-health checks into one summary (`--json` / `--ci`); the reference implementation for the rendering engine's Verdict → Evidence → Action pattern.
+- `init` / `connect` / `disconnect` / `status` / `config` — account and settings lifecycle, with global/local config scoping.
+- **Planned (not yet implemented):** `ask` (read-only Q&A) and the AI Agent Fallback (natural-language code edits, PRD story 5).
 
 ## Folder Structure
 
 ```
 decode-cli/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                  # CI pipeline: install → lint → test
-│
-├── bin/
-│   └── decode.js                   # CLI entry point (maps to "bin" in package.json)
-│
+├── .github/workflows/ci.yml         # CI: install → lint → test (Node 22)
+├── bin/decode.js                    # CLI entry point ("bin" in package.json)
 ├── src/
-│   ├── index.js                    # app bootstrap, registers commands with commander
-│   │
-│   ├── commands/                   # one file per command group — thin layer:
-│   │   │                           # parse args → call service → format output
-│   │   ├── init.js
-│   │   ├── connect.js
-│   │   ├── disconnect.js
-│   │   ├── status.js
-│   │   ├── api.js                  # handles `api list/add/remove/check`
-│   │   ├── github.js               # handles `github connect/profile/analyze`
-│   │   ├── doc.js                  # handles `doc`, `doc --explain`, `doc check`
-│   │   ├── config.js               # handles `config list/set/reset`
-│   │   └── audit.js                # composite audit summary
-│   │
-│   ├── services/                   # actual logic, reused across commands
-│   │   ├── apiChecker.js           # "API Contract Verifier" skill logic
-│   │   ├── auditRunner.js          # composes api + docs + repo checks
-│   │   ├── configStore.js          # reads/writes decode.config.json + .env
-│   │   ├── docGenerator.js         # "Doc Generator" skill logic
-│   │   ├── docStaleness.js         # mtime-based doc staleness heuristic
-│   │   ├── githubClient.js         # wraps octokit calls
-│   │   ├── llmClient.js            # wraps calls to the LLM provider/router
-│   │   ├── projectScanner.js       # read-only file tree + key-file sampler
-│   │   ├── repoAnalyst.js          # "Repo Analyst" agent logic
-│   │   ├── repoHealth.js           # git-local, token-free repo health check
-│   │   └── routeDetector.js        # auto-detects Express routes from source
-│   │
-│   ├── utils/
-│   │   └── output.js               # chalk/table/boxen formatting helpers
-│   │
-│   └── constants.js                # CLI name/version, timeout, exit codes
-│
+│   ├── index.js                    # app bootstrap: registers commands with commander
+│   ├── constants.js                # CLI identity, timeouts, exit codes
+│   ├── commands/                   # thin layer per command group (parse → service → render)
+│   │   ├── init.js  connect.js  disconnect.js  status.js
+│   │   ├── api.js                  # api list/check (auto-detection)
+│   │   ├── github.js               # github connect/profile/analyze
+│   │   ├── doc.js                  # doc, doc --explain, doc check
+│   │   ├── config.js               # config list/set/reset (--global | --local)
+│   │   ├── audit.js                # composite audit (rendering-engine reference impl)
+│   │   └── help.js                 # custom landing screen
+│   ├── services/                   # reused logic, unit-testable without the CLI
+│   │   ├── apiChecker.js, auditRunner.js, configStore.js, docGenerator.js,
+│   │   ├── docStaleness.js, githubClient.js, llmClient.js, projectScanner.js,
+│   │   ├── repoAnalyst.js, repoHealth.js, routeDetector.js
+│   ├── ui/                         # composable terminal rendering engine
+│   │   ├── renderer.js  motion.js  screen.js  progress.js
+│   │   ├── divider.js  icons.js  layout.js  panel.js  prompt.js  status.js
+│   │   ├── table.js  terminal.js  theme.js  typography.js  health-pulse.js
+│   │   ├── index.js
+│   │   └── ENGINE.md  README.md  RENDERING_ENGINE_COMPLETE.md
+│   └── utils/output.js             # shared chalk/table/boxen helpers
 ├── test/
-│   ├── unit/                       # hits services directly
-│   │   ├── apiChecker.test.js
-│   │   ├── auditRunner.test.js
-│   │   ├── configStore.test.js
-│   │   ├── docGenerator.test.js
-│   │   ├── docStaleness.test.js
-│   │   ├── githubClient.test.js
-│   │   ├── llmClient.test.js
-│   │   ├── output.test.js
-│   │   ├── projectScanner.test.js
-│   │   ├── repoAnalyst.test.js
-│   │   ├── repoHealth.test.js
-│   │   └── routeDetector.test.js
-│   └── integration/                # runs the built CLI binary via execa
-│       ├── api.test.js
-│       ├── audit.test.js
-│       ├── cli.test.js
-│       ├── config.test.js
-│       ├── connect.test.js
-│       ├── doc.test.js
-│       ├── github.test.js
-│       └── init.test.js
-│
+│   ├── unit/                       # hits services directly (vitest)
+│   └── integration/                # runs the real CLI binary via execa
 ├── docs/                           # generated output (docs/architecture.md) —
-│   └── architecture.md             # written by `decode doc`, separate from the
-│                                   # hand-written project docs below
-│
-├── .env.example
-├── .gitignore
-├── .eslintrc.json
-├── ARCHITECTURE.md                 # this file
-├── AGENTS.md                       # agent rules/constitution
-├── AGENTS_AND_SKILLS.md
-├── PRD.md
-├── CHANGELOG.md
-├── LICENSE
-├── README.md
-└── package.json
+│   └── architecture.md             # written by `decode doc`, separate from hand-written docs
+├── examples/                       # UI showcase / usage examples (examples/ui-showcase.js)
+├── .env.example  .eslintrc.json  .gitignore  decode.config.example.json
+├── decode.config.json → gitignored local runtime state (not committed)
+├── AGENTS.md  AGENTS_AND_SKILLS.md  PRD.md  README.md
+├── CHANGELOG.md  TASKS.md  COMMAND_STANDARD.md  LICENSE  package.json
 ```
 
 **Design rationale for the split:**
-- `commands/` vs `services/` keeps command handlers thin and testable, and keeps the actual API/GitHub/doc/repo logic independently unit-testable without spinning up the CLI parser.
+- `commands/` vs `services/` keeps command handlers thin and testable, and keeps the API/GitHub/doc/repo logic independently unit-testable without spinning up the CLI parser.
 - `docs/` (generated output) is kept separate from the hand-written project docs at repo root, so DeCode's own generated architecture doc never collides with this one.
+- The `src/ui/` rendering engine is isolated so presentation can evolve without touching command logic — the audit command is written against it as the reference implementation.
 
 ## Security & Safety Boundaries
 - Any AI-proposed file write (planned assistant, PRD story 5) is restricted to the current working project directory — no arbitrary filesystem or shell access.
 - No proposed change is ever written without explicit human approval.
-- API keys/tokens are read from environment/config, never hardcoded or committed.
+- API keys/tokens are read from environment/config, never hardcoded or committed. Local runtime config is gitignored.
 
 ## Testing Strategy
-- Unit tests cover command parsing, API check logic, GitHub data transforms, and config read/write.
-- Integration tests run the built CLI binary as a subprocess and assert on stdout/exit codes per command.
+- **Unit tests** cover command parsing, API check logic, route detection, GitHub data transforms, commit-health heuristics, and config read/write / two-tier merge.
+- **Integration tests** run the real CLI binary as a subprocess (via `execa`) and assert on stdout/exit codes per command, using hermetic local servers (fake GitHub/LLM/backend) so CI never needs network access.
+- **No browser → no Playwright.** DeCode is a CLI, not a web app, so a browser-automation harness would test nothing that exists. Unit (`vitest`) plus execa-driven CLI integration tests fill the equivalent role: they exercise the actual shipped executable end-to-end and gate CI, which is the purpose a browser test would otherwise serve.
 
 ## CI/CD
 GitHub Actions workflow runs on every push: install → lint → unit tests → integration tests. Must be green on the latest commit at submission time.
 
 ## Deferred / Roadmap
-- Visual trace of agent actions (currently: step-by-step terminal output) — future iteration could add a companion visual/GUI trace.
-- Region-select visual code editing (currently: `--file`/`--lines` targeting) — future iteration could add a GUI companion app for visual selection.
+- Visual trace of agent actions (currently happens via step-by-step terminal output) — a companion visual/GUI trace is a future iteration.
+- Region-select visual code editing (currently `--file`/`--lines` targeting) — a true visual selector requires a GUI companion app.
+
+## Doc Index
+The top-level, authoritative docs are:
+- [`PRD.md`](./PRD.md) — product requirements and acceptance criteria.
+- [`AGENTS.md`](./AGENTS.md) — agent rules/constitution for coding agents working on this repo.
+- [`AGENTS_AND_SKILLS.md`](./AGENTS_AND_SKILLS.md) — the custom Repo Analyst agent and the API Contract Verifier skill.
+- **`COMMAND_STANDARD.md`** — engineering standard for authoring new commands (the style guide that keeps future commands consistent with the reference implementation). This doc is intentionally kept separate; it is a how-to-write-commands guide, not the system architecture.
+- [`CHANGELOG.md`](./CHANGELOG.md) and [`TASKS.md`](./TASKS.md) — change history and the agent task log.
