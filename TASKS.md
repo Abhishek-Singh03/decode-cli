@@ -110,3 +110,60 @@ CHANGELOG.md for user-facing notes).
 - `npm run lint` — clean (exit 0).
 - `CHANGELOG.md` updated with entries for every fix/enhancement.
 - This file documents what was actually done.
+
+---
+
+# Cleanup & Finalization Pass (2026-08-08) — hackathon submission prep
+
+## Task A — Remove committed runtime state
+- `decode.config.json` (committed, with a leftover manual test route + cached
+  audit timestamps) is now **gitignored** and untracked (`git rm --cached`);
+  the local file stays on disk but is no longer part of the repo.
+- Added `decode.config.example.json` — a clean template showing the config
+  shape (`llm.provider`, `llm.apiKeyRef`, `github.tokenRef`) with **no** routes
+  array or audit cache, since routes are always auto-detected from source.
+- Verified README has no instructions to hand-edit the config to add routes
+  (it already documents auto-detection).
+
+## Task B — Consolidate root-level docs
+- **Deleted** `decode-base-document.md` — early planning draft, fully
+  superseded by PRD.md + ARCHITECTURE.md; no unique content lost (its
+  Playwright-substitution rationale is now stated explicitly in
+  ARCHITECTURE.md's Testing Strategy).
+- **Moved** `RENDERING_ENGINE_COMPLETE.md` → `src/ui/RENDERING_ENGINE_COMPLETE.md`
+  (beside the ENGINE.md it complements); ARCHITECTURE.md links to the new path.
+- **Deleted** `AUDIT_REFERENCE.md` — it duplicated `COMMAND_STANDARD.md` (same
+  Verdict→Evidence→Action / output modes / error handling) and referenced the
+  removed manual `api add`. Kept `COMMAND_STANDARD.md` as the single
+  "how to write a command" style guide and pointed to it from ARCHITECTURE.md.
+- Resulting root doc set: `README.md`, `ARCHITECTURE.md`, `AGENTS.md`,
+  `AGENTS_AND_SKILLS.md`, `PRD.md`, `TASKS.md`, `CHANGELOG.md`,
+  `COMMAND_STANDARD.md` (retained reference), `LICENSE`.
+
+## Task C — ARCHITECTURE.md + PRD.md reality pass
+- **ARCHITECTURE.md**: rewritten — api auto-detection (routeDetector, cached
+  scan, no manual add), two-tier global/local config in Data Model, rendering
+  engine (`src/ui/`) in the stack with a link to the moved report, folder tree
+  rebuilt against the actual repo tree (added `src/ui/`, `examples/`,
+  `decode.config.example.json`, `TASKS.md`, help.js, etc.), and a Doc Index.
+- **PRD.md**: API story + auto-detection ACs (already current, confirmed), new
+  config-scoping ACs under Setup & Account Management, and Story 5 (AI
+  assistant) explicitly marked **Planned / not yet implemented**.
+
+## Task D — Playwright substitution documented
+- ARCHITECTURE Testing Strategy + README now state plainly that Playwright is
+  intentionally not used (CLI, not a web app) and that `vitest` unit tests plus
+  `execa`-driven CLI integration tests provide the equivalent end-to-end gate.
+
+## Task E — CI fix
+- `.github/workflows/ci.yml` `node-version` bumped `20` → `22` to remove the
+  Node 20 deprecation warning in Actions.
+
+## Task F — Release tag
+- CHANGELOG `[0.1.0]` entry written (release summary + Added/Fixed/Changed),
+  `package.json` version `0.1.0`, git tag `v0.1.0` created locally.
+  **Not pushed** — the tag must be pushed by the user with `git push origin v0.1.0`.
+
+## Final pass verification
+- `npm test` still green (documentation/config changes are non-code).
+- `npm run lint` still green.
