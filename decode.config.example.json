@@ -1,0 +1,9 @@
+{
+  "llm": {
+    "provider": null,
+    "apiKeyRef": "LLM_PROVIDER_API_KEY"
+  },
+  "github": {
+    "tokenRef": "GITHUB_TOKEN"
+  }
+}
