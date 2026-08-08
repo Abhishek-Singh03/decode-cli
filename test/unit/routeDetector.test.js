@@ -142,7 +142,9 @@ describe('resolveBackendBaseUrl', () => {
     const neverReachable = async () => {
       throw new Error('refused');
     };
-    const base = await resolveBackendBaseUrl({ cwd: baseDir, fetchImpl: neverReachable });
+    // Inject the fake fetchImpl in the options object (second argument) — the
+    // function signature is resolveBackendBaseUrl({ cwd, baseUrl }, { fetchImpl }).
+    const base = await resolveBackendBaseUrl({ cwd: baseDir }, { fetchImpl: neverReachable });
     expect(base).toBeNull();
   });
 });
