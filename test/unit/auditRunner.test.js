@@ -104,8 +104,8 @@ describe('runAudit', () => {
 
   it('fails the audit when an API route fails', async () => {
     makeHealthyRepo();
-    addFreshDocs();
     addApiBackend(['/fail']);
+    addFreshDocs();
 
     const result = await runAudit({ cwd: tmp });
     expect(result.api.status).toBe('fail');
