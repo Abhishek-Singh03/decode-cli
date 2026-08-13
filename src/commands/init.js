@@ -26,6 +26,25 @@ import {
 } from '../services/configStore.js';
 import * as output from '../utils/output.js';
 
+export async function executeInit(opts) {
+  try {
+    const scope = await resolveScope(opts);
+    const answers = await gatherCredentials(opts);
+    saveConnection(
+      {
+        llmProvider: answers.llmProvider,
+        llmApiKey: answers.llmApiKey,
+        githubToken: answers.githubToken,
+      },
+      { scope },
+    );
+    output.success(`DeCode is configured (${scope}). Run \`decode status\` to verify.`);
+  } catch (err) {
+    output.error(`init failed: ${err.message}`);
+    process.exitCode = 1;
+  }
+}
+
 export function initCommand() {
   return new Command('init')
     .description('Interactive setup wizard — connect your LLM provider and GitHub')
@@ -33,24 +52,7 @@ export function initCommand() {
     .option('--llm-api-key <key>', 'LLM provider API key (skips prompt)')
     .option('--github-token <token>', 'GitHub personal access token (skips prompt)')
     .option('--scope <global|local>', 'Config scope to write to (defaults: global on first run, then local)')
-    .action(async (opts) => {
-      try {
-        const scope = await resolveScope(opts);
-        const answers = await gatherCredentials(opts);
-        saveConnection(
-          {
-            llmProvider: answers.llmProvider,
-            llmApiKey: answers.llmApiKey,
-            githubToken: answers.githubToken,
-          },
-          { scope },
-        );
-        output.success(`DeCode is configured (${scope}). Run \`decode status\` to verify.`);
-      } catch (err) {
-        output.error(`init failed: ${err.message}`);
-        process.exitCode = 1;
-      }
-    });
+    .action(async (opts) => executeInit(opts));
 }
 
 /** Default scope heuristic + optional interactive prompt. */

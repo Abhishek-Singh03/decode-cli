@@ -38,36 +38,38 @@ export function docCommand() {
       if (opts.explain !== undefined) {
         return explainFlow(message, opts);
       }
-      return generateFlow(message, opts);
+      return executeDoc(message, opts);
     });
+}
+
+export function executeDocCheck(opts) {
+  try {
+    const result = checkDocStaleness();
+    if (opts.json) {
+      output.printJson(result);
+    } else if (result.stale) {
+      output.error('Documentation appears stale:');
+      for (const file of result.staleSources) output.error(`  ${file} was modified after the docs`);
+      output.dim(`Docs: ${result.docFiles.join(', ') || 'none found'}`);
+    } else {
+      output.success('Documentation is up to date.');
+      output.dim(`Docs: ${result.docFiles.join(', ') || 'none found'}`);
+    }
+    if (result.stale) process.exitCode = 1;
+  } catch (err) {
+    output.error(`doc check failed: ${err.message}`);
+    process.exitCode = 1;
+  }
 }
 
 function checkCommand() {
   return new Command('check')
     .description('Report whether documentation appears stale relative to recent source changes')
     .option('--json', 'Output machine-readable JSON to stdout')
-    .action((opts) => {
-      try {
-        const result = checkDocStaleness();
-        if (opts.json) {
-          output.printJson(result);
-        } else if (result.stale) {
-          output.error('Documentation appears stale:');
-          for (const file of result.staleSources) output.error(`  ${file} was modified after the docs`);
-          output.dim(`Docs: ${result.docFiles.join(', ') || 'none found'}`);
-        } else {
-          output.success('Documentation is up to date.');
-          output.dim(`Docs: ${result.docFiles.join(', ') || 'none found'}`);
-        }
-        if (result.stale) process.exitCode = 1;
-      } catch (err) {
-        output.error(`doc check failed: ${err.message}`);
-        process.exitCode = 1;
-      }
-    });
+    .action((opts) => executeDocCheck(opts));
 }
 
-async function generateFlow(message, opts) {
+export async function executeDoc(message, opts) {
   try {
     const project = scanProject();
     output.dim(`Scanned ${project.tree.length} files across the project.`);

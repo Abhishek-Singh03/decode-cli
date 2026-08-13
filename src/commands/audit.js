@@ -35,7 +35,7 @@ export function auditCommand() {
 /**
  * Execute the audit flow with rendering.
  */
-async function executeAudit(opts) {
+export async function executeAudit(opts) {
   // JSON output bypasses UI rendering
   if (opts.json) {
     const result = await runAudit();

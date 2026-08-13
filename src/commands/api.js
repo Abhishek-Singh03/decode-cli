@@ -30,47 +30,107 @@ export function apiCommand() {
     .addCommand(apiCheckCommand());
 }
 
+export function executeApiList(opts) {
+  try {
+    const scan = scanRoutes({ refresh: opts.refresh });
+
+    if (opts.json) {
+      output.printJson({ framework: scan.framework, routes: scan.routes, cached: scan.cached, scannedAt: scan.scannedAt });
+      return;
+    }
+
+    if (!scan.framework) {
+      output.info('No supported backend framework detected (currently Express).');
+      return;
+    }
+
+    output.heading(`Backend framework: ${scan.framework}${scan.cached ? ' (cached — `decode api list --refresh` to rescan)' : ''}`);
+    if (scan.routes.length === 0) {
+      output.info('No routes detected. Add some to the source and re-run with `--refresh`.');
+      return;
+    }
+
+    output.printTable(
+      ['#', 'Method', 'Path', 'Source', 'Flags'],
+      scan.routes.map((r, i) => [
+        String(i + 1),
+        r.method.toUpperCase(),
+        r.path,
+        `${r.file}:${r.line}`,
+        r.hasParams ? '⚠ has params' : '',
+      ]),
+    );
+    output.dim(`${plural(scan.routes.length, 'route')} detected — run \`decode api check\` to test them.`);
+  } catch (err) {
+    output.error(`api list failed: ${err.message}`);
+    process.exitCode = 1;
+  }
+}
+
 function apiListCommand() {
   return new Command('list')
     .description('Auto-detect backend routes from the project source (cached; --refresh rescans)')
     .option('--refresh', 'Force a fresh scan instead of using the cached result')
     .option('--json', 'Output machine-readable JSON to stdout')
-    .action((opts) => {
-      try {
-        const scan = scanRoutes({ refresh: opts.refresh });
+    .action((opts) => executeApiList(opts));
+}
 
-        if (opts.json) {
-          output.printJson({ framework: scan.framework, routes: scan.routes, cached: scan.cached, scannedAt: scan.scannedAt });
-          return;
-        }
+export async function executeApiCheck(pathFilters, opts) {
+  try {
+    const scan = scanRoutes({ refresh: opts.refresh });
+    const filters = (pathFilters || []).filter(Boolean).map((f) => f.trim().toLowerCase());
+    const selected = scan.routes.filter(
+      (r) => filters.length === 0 || filters.some((f) => r.path.toLowerCase().includes(f)),
+    );
 
-        if (!scan.framework) {
-          output.info('No supported backend framework detected (currently Express).');
-          return;
-        }
+    if (selected.length === 0) {
+      output.error(`No API routes detected${filters.length ? ` matching "${pathFilters.join(', ')}"` : ''}. Run \`decode api list\` first.`);
+      process.exitCode = 1;
+      return;
+    }
 
-        output.heading(`Backend framework: ${scan.framework}${scan.cached ? ' (cached — `decode api list --refresh` to rescan)' : ''}`);
-        if (scan.routes.length === 0) {
-          output.info('No routes detected. Add some to the source and re-run with `--refresh`.');
-          return;
-        }
+    const base = await resolveBackendBaseUrl({ baseUrl: opts.baseUrl });
+    if (!base) {
+      output.error('Could not determine the backend base URL. Set PORT in your .env or pass --base-url <url>.');
+      process.exitCode = 1;
+      return;
+    }
 
-        output.printTable(
-          ['#', 'Method', 'Path', 'Source', 'Flags'],
-          scan.routes.map((r, i) => [
-            String(i + 1),
-            r.method.toUpperCase(),
-            r.path,
-            `${r.file}:${r.line}`,
-            r.hasParams ? '⚠ has params' : '',
-          ]),
-        );
-        output.dim(`${plural(scan.routes.length, 'route')} detected — run \`decode api check\` to test them.`);
-      } catch (err) {
-        output.error(`api list failed: ${err.message}`);
-        process.exitCode = 1;
-      }
-    });
+    if (!(await isBackendReachable(base))) {
+      output.error(`Backend not reachable at ${base} — is it running?`);
+      process.exitCode = 1;
+      return;
+    }
+
+    const spec = opts.spec ? await loadSpec(opts.spec) : null;
+
+    const useSpinner = !opts.json && !opts.ci && process.stdout.isTTY;
+    const spinner = useSpinner
+      ? ora(`Checking ${plural(selected.length, 'route')} against ${base}...`).start()
+      : null;
+
+    let results;
+    try {
+      results = await runChecks(selected, base, { spec });
+    } finally {
+      if (spinner) spinner.stop();
+    }
+
+    const summary = summarizeResults(results);
+
+    if (opts.json) {
+      output.printJson({ baseUrl: base, summary, results });
+    } else if (opts.ci) {
+      printCiResults(results, summary);
+    } else {
+      printHumanResults(results, summary);
+    }
+
+    if (summary.failed > 0) process.exitCode = 1;
+  } catch (err) {
+    output.error(`api check failed: ${err.message}`);
+    process.exitCode = 1;
+  }
 }
 
 function apiCheckCommand() {
@@ -82,63 +142,7 @@ function apiCheckCommand() {
     .option('--json', 'Output machine-readable JSON to stdout')
     .option('--ci', 'CI-friendly minimal output and strict exit code')
     .option('--refresh', 'Force a fresh route scan')
-    .action(async (pathFilters, opts) => {
-      try {
-        const scan = scanRoutes({ refresh: opts.refresh });
-        const filters = (pathFilters || []).filter(Boolean).map((f) => f.trim().toLowerCase());
-        const selected = scan.routes.filter(
-          (r) => filters.length === 0 || filters.some((f) => r.path.toLowerCase().includes(f)),
-        );
-
-        if (selected.length === 0) {
-          output.error(`No API routes detected${filters.length ? ` matching "${pathFilters.join(', ')}"` : ''}. Run \`decode api list\` first.`);
-          process.exitCode = 1;
-          return;
-        }
-
-        const base = await resolveBackendBaseUrl({ baseUrl: opts.baseUrl });
-        if (!base) {
-          output.error('Could not determine the backend base URL. Set PORT in your .env or pass --base-url <url>.');
-          process.exitCode = 1;
-          return;
-        }
-
-        if (!(await isBackendReachable(base))) {
-          output.error(`Backend not reachable at ${base} — is it running?`);
-          process.exitCode = 1;
-          return;
-        }
-
-        const spec = opts.spec ? await loadSpec(opts.spec) : null;
-
-        const useSpinner = !opts.json && !opts.ci && process.stdout.isTTY;
-        const spinner = useSpinner
-          ? ora(`Checking ${plural(selected.length, 'route')} against ${base}...`).start()
-          : null;
-
-        let results;
-        try {
-          results = await runChecks(selected, base, { spec });
-        } finally {
-          if (spinner) spinner.stop();
-        }
-
-        const summary = summarizeResults(results);
-
-        if (opts.json) {
-          output.printJson({ baseUrl: base, summary, results });
-        } else if (opts.ci) {
-          printCiResults(results, summary);
-        } else {
-          printHumanResults(results, summary);
-        }
-
-        if (summary.failed > 0) process.exitCode = 1;
-      } catch (err) {
-        output.error(`api check failed: ${err.message}`);
-        process.exitCode = 1;
-      }
-    });
+    .action(async (pathFilters, opts) => executeApiCheck(pathFilters, opts));
 }
 
 /** Runs live checks on static routes; dynamic routes are skipped, not requested. */
