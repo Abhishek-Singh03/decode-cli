@@ -7,3 +7,5 @@ node_modules/
 decode.config.json
 docs/*
 !docs/.gitkeep
+!docs/superpowers
+!docs/superpowers/**
