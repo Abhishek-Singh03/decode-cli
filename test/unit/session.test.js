@@ -44,4 +44,42 @@ describe('command module exports', () => {
 });
 
 // --- Task 2: parseSlashInput parser ---
-// (imported once session.js exists; skipped here until that file is created)
+import { parseSlashInput } from '../../src/session/session.js';
+
+describe('parseSlashInput', () => {
+  it('returns null for non-slash input', () => {
+    expect(parseSlashInput('hello world')).toBeNull();
+  });
+
+  it('parses a bare slash command with no subcommand', () => {
+    expect(parseSlashInput('/api')).toEqual({ command: 'api', args: [], opts: {} });
+  });
+
+  it('parses a slash command with a subcommand', () => {
+    expect(parseSlashInput('/api list')).toEqual({ command: 'api list', args: [], opts: {} });
+  });
+
+  it('parses a slash command with a flag', () => {
+    expect(parseSlashInput('/api list --json')).toEqual({ command: 'api list', args: [], opts: { json: true } });
+  });
+
+  it('parses a slash command with a positional arg and a flag', () => {
+    expect(parseSlashInput('/github analyze my-org/my-repo --json')).toEqual({
+      command: 'github analyze',
+      args: ['my-org/my-repo'],
+      opts: { json: true },
+    });
+  });
+
+  it('parses --key=value flags', () => {
+    expect(parseSlashInput('/config set theme dark')).toEqual({
+      command: 'config set',
+      args: ['theme', 'dark'],
+      opts: {},
+    });
+  });
+
+  it('parses -y short flags as boolean', () => {
+    expect(parseSlashInput('/disconnect -y')).toEqual({ command: 'disconnect', args: [], opts: { y: true } });
+  });
+});

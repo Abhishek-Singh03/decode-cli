@@ -176,3 +176,37 @@ CHANGELOG.md for user-facing notes).
   for every run, bumping the integration `testTimeout` to 60s, and correcting a
   `resolveBackendBaseUrl` unit test that injected its fake `fetchImpl` in the
   wrong position.
+## Task G — Interactive session (2026-08-13)
+
+### Goal
+Add a persistent REPL so `decode` with no arguments starts an interactive session; `decode <command>` one-shot mode is completely unchanged.
+
+### What was built
+
+**Task G.1 — Export action functions from all command modules**
+Each command's inner action function was hoisted to a named export (`executeApiList`, `executeApiCheck`, `executeGithubConnect`, `executeGithubProfile`, `executeGithubAnalyze`, `executeDoc`, `executeDocCheck`, `executeAudit`, `executeInit`, `executeConnect`, `executeDisconnect`, `executeStatus`, `executeConfigList`, `executeConfigSet`, `executeConfigReset`). The commander `.action()` callbacks became one-liner delegates.
+- 9 command modules changed; no behaviour change for one-shot commands.
+- `test/unit/session.test.js` created with 15 export assertions — all pass.
+
+**Task G.2 — `src/session/session.js`**
+New module with:
+- `parseSlashInput(raw)` — exported pure parser; splits `/cmd sub --flag` into `{ command, args, opts }`.
+- `DISPATCH` table — maps all 15 command strings to `{ handler, description }` (single source of truth for `/help`).
+- `GROUPS` map for group-level help (`/api` → lists `api list`, `api check`).
+- `startSession()` — `readline`-based REPL loop; loads config once; handles `/help`, `/exit`, group help, dispatch, unknown-command error, non-slash AI seam (silent stub), Ctrl+C/Ctrl+D.
+
+**Task G.3 — `src/index.js` entry point**
+`process.argv.length === 2` branch replaced: imports `startSession` and calls it instead of `renderLandingScreen`.
+
+**Task G.4 — Tests**
+- `test/unit/session.test.js`: 7 `parseSlashInput` parser assertions added (22 unit tests total, all pass).
+- `test/integration/session.test.js`: 11 integration tests (banner, prompt, /help output, /exit, unknown command → stderr, non-slash silence, group help, empty input). All pass.
+
+**Task G.5 — Docs**
+- `README.md`: Interactive Session section added after Quick Start.
+- `ARCHITECTURE.md`: Folder structure updated to include `src/session/`; new "Interactive Session Design" section added after the folder map.
+- `TASKS.md`: This entry.
+
+### Verification
+- `npm test` — **22 files, 203 tests, all passing**.
+- `npm run lint` — clean (exit 0).

@@ -67,7 +67,7 @@ decode-cli/
 ├── .github/workflows/ci.yml         # CI: install → lint → test (Node 22)
 ├── bin/decode.js                    # CLI entry point ("bin" in package.json)
 ├── src/
-│   ├── index.js                    # app bootstrap: registers commands with commander
+│   ├── index.js                    # app bootstrap: registers commands; no-arg → startSession()
 │   ├── constants.js                # CLI identity, timeouts, exit codes
 │   ├── commands/                   # thin layer per command group (parse → service → render)
 │   │   ├── init.js  connect.js  disconnect.js  status.js
@@ -77,6 +77,8 @@ decode-cli/
 │   │   ├── config.js               # config list/set/reset (--global | --local)
 │   │   ├── audit.js                # composite audit (rendering-engine reference impl)
 │   │   └── help.js                 # custom landing screen
+│   ├── session/
+│   │   └── session.js              # interactive REPL — startSession(), parseSlashInput()
 │   ├── services/                   # reused logic, unit-testable without the CLI
 │   │   ├── apiChecker.js, auditRunner.js, configStore.js, docGenerator.js,
 │   │   ├── docStaleness.js, githubClient.js, llmClient.js, projectScanner.js,
@@ -89,7 +91,7 @@ decode-cli/
 │   │   └── ENGINE.md  README.md  RENDERING_ENGINE_COMPLETE.md
 │   └── utils/output.js             # shared chalk/table/boxen helpers
 ├── test/
-│   ├── unit/                       # hits services directly (vitest)
+│   ├── unit/                       # hits services + session parser directly (vitest)
 │   └── integration/                # runs the real CLI binary via execa
 ├── docs/                           # generated output (docs/architecture.md) —
 │   └── architecture.md             # written by `decode doc`, separate from hand-written docs
@@ -102,8 +104,20 @@ decode-cli/
 
 **Design rationale for the split:**
 - `commands/` vs `services/` keeps command handlers thin and testable, and keeps the API/GitHub/doc/repo logic independently unit-testable without spinning up the CLI parser.
+- `session/` is a separate module so the interactive REPL can import directly from `commands/` without the commander layer — each command exports a named `execute*` function that both the commander `.action()` wrapper and the session dispatch table call.
 - `docs/` (generated output) is kept separate from the hand-written project docs at repo root, so DeCode's own generated architecture doc never collides with this one.
 - The `src/ui/` rendering engine is isolated so presentation can evolve without touching command logic — the audit command is written against it as the reference implementation.
+
+## Interactive Session Design
+
+Running `decode` with no arguments calls `startSession()` in `src/session/session.js`. The session uses Node's built-in `readline` — no inquirer — to avoid TTY assumptions in tests.
+
+Key design decisions:
+- **Dispatch table** (`DISPATCH`): maps command strings like `'api list'` to `{ handler, description }`. Single source of truth for `/help` generation.
+- **`parseSlashInput(raw)`**: exported pure function; strips leading `/`, splits tokens, detects known subcommand keywords, and produces `{ command, args, opts }`. Tested independently in `test/unit/session.test.js`.
+- **Config loaded once** at session start via `readConfig()`. Commands share the result without re-reading disk on each invocation.
+- **Error isolation**: each dispatch call is wrapped in `try/catch`; a failing command prints to stderr via `output.error()` and returns control to the prompt without killing the loop.
+- **AI agent seam**: non-slash input falls into an intentionally empty branch — the hook for a future streaming AI agent.
 
 ## Security & Safety Boundaries
 - Any AI-proposed file write (planned assistant, PRD story 5) is restricted to the current working project directory — no arbitrary filesystem or shell access.

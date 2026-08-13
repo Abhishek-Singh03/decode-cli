@@ -21,6 +21,25 @@ decode status         # confirm everything's connected
 decode audit           # run a full check: API health + doc freshness + repo health
 ```
 
+## Interactive Session
+
+Run `decode` with no arguments to enter a persistent REPL session:
+
+```
+$ decode
+
+DeCode Interactive Session
+  Type /help for commands, /exit to quit, Ctrl+D to quit.
+
+decode> /status
+decode> /api list --json
+decode> /github analyze my-org/my-repo
+decode> /exit
+Goodbye!
+```
+
+Slash commands map to the same logic as the one-shot CLI (`/api list` = `decode api list`), so flags work identically. Type `/help` inside the session for the full command list. Non-slash input is reserved for the upcoming AI agent feature.
+
 ## Commands
 
 | Command | Description |
