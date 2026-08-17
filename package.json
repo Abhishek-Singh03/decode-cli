@@ -15,7 +15,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "dev": "node bin/decode.js",
+    "dev": "tsx bin/decode.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -26,13 +26,18 @@
     "chalk": "^5.3.0",
     "cli-table3": "^0.6.5",
     "commander": "^12.1.0",
+    "ink": "^7.1.1",
+    "ink-text-input": "^6.0.0",
     "inquirer": "^9.2.23",
     "octokit": "^3.1.0",
-    "ora": "^8.1.0"
+    "ora": "^8.1.0",
+    "tsx": "^4.23.12"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^8.57.0",
     "execa": "^8.0.1",
+    "ink-testing-library": "^4.0.0",
     "vitest": "^3.2.7"
   }
 }

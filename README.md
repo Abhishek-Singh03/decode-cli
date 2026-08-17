@@ -23,20 +23,27 @@ decode audit           # run a full check: API health + doc freshness + repo hea
 
 ## Interactive Session
 
-Run `decode` with no arguments to enter a persistent REPL session:
+Run `decode` with no arguments to start the visual session:
 
 ```
-$ decode
-
-DeCode Interactive Session
-  Type /help for commands, /exit to quit, Ctrl+D to quit.
-
-decode> /status
-decode> /api list --json
-decode> /github analyze my-org/my-repo
-decode> /exit
-Goodbye!
+╭──────────────────────────────────────────────────────╮
+│  /><                   │  Tips for getting started   │
+│  DeCode                │  /help   list all commands  │
+│  Your Project, Decoded.│  /exit   quit the session   │
+│                        │                             │
+│  Welcome back!         │  What's new                 │
+│  ~/my-project          │  • Interactive session UI   │
+│  Provider: claude      │                             │
+╰──────────────────────────────────────────────────────╯
+decode>
 ```
+
+Type `/help` for all commands, `/exit` to quit.
+
+**Non-TTY / CI fallback:** When stdout is not a TTY (piped output, CI
+environments), `decode` automatically falls back to the plain readline
+session — no Ink, no terminal graphics. Existing scripted usage is
+unaffected.
 
 Slash commands map to the same logic as the one-shot CLI (`/api list` = `decode api list`), so flags work identically. Type `/help` inside the session for the full command list. Non-slash input is reserved for the upcoming AI agent feature.
 

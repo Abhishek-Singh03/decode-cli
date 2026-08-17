@@ -154,6 +154,56 @@ function renderGroupHelp(group) {
 }
 
 // ---------------------------------------------------------------------------
+// dispatchCommand — exported so App.jsx can call it directly (Ink path)
+// ---------------------------------------------------------------------------
+/**
+ * Processes one raw input line from the REPL.
+ * Returns { type: 'exit' } if the session should terminate, { type: 'ok' } otherwise.
+ * Side effects: calls command handlers which write to console.log/console.error.
+ */
+export async function dispatchCommand(raw, _config) {
+  if (!raw) return { type: 'ok' };
+
+  if (raw.startsWith('/')) {
+    const parsed = parseSlashInput(raw);
+    if (!parsed) {
+      output.error('Could not parse command. Type /help for a list.');
+      return { type: 'ok' };
+    }
+
+    const { command, args, opts } = parsed;
+
+    if (command === 'exit' || command === 'quit') {
+      return { type: 'exit' };
+    }
+    if (command === 'help') {
+      renderHelp();
+      return { type: 'ok' };
+    }
+    if (GROUPS[command]) {
+      renderGroupHelp(command);
+      return { type: 'ok' };
+    }
+
+    const entry = DISPATCH[command];
+    if (!entry) {
+      output.error(`Unknown command: /${command}. Type /help for a list.`);
+      return { type: 'ok' };
+    }
+
+    try {
+      await entry.handler(args, opts);
+    } catch (err) {
+      output.error(`/${command} failed: ${err.message}`);
+    }
+    return { type: 'ok' };
+  }
+
+  // Non-slash input: AI agent seam (intentionally empty for now)
+  return { type: 'ok' };
+}
+
+// ---------------------------------------------------------------------------
 // Banner
 // ---------------------------------------------------------------------------
 function printBanner(_config) {
@@ -164,10 +214,9 @@ function printBanner(_config) {
 }
 
 // ---------------------------------------------------------------------------
-// startSession — the public entry point
+// startReadlineSession — readline-based REPL (internal)
 // ---------------------------------------------------------------------------
-export async function startSession() {
-  const config = readConfig();
+async function startReadlineSession(config) {
   printBanner(config);
 
   const rl = readline.createInterface({
@@ -181,62 +230,11 @@ export async function startSession() {
 
   rl.on('line', async (line) => {
     const raw = line.trim();
-
-    if (!raw) {
-      rl.prompt();
+    const result = await dispatchCommand(raw, config);
+    if (result.type === 'exit') {
+      rl.close();
       return;
     }
-
-    // --- Slash commands ---
-    if (raw.startsWith('/')) {
-      const parsed = parseSlashInput(raw);
-      if (!parsed) {
-        output.error('Could not parse command. Type /help for a list.');
-        rl.prompt();
-        return;
-      }
-
-      const { command, args, opts } = parsed;
-
-      // Built-in meta commands
-      if (command === 'exit' || command === 'quit') {
-        rl.close();
-        return;
-      }
-      if (command === 'help') {
-        renderHelp();
-        rl.prompt();
-        return;
-      }
-
-      // Group-level help (e.g. `/api` with no subcommand)
-      if (GROUPS[command]) {
-        renderGroupHelp(command);
-        rl.prompt();
-        return;
-      }
-
-      // Dispatch
-      const entry = DISPATCH[command];
-      if (!entry) {
-        output.error(`Unknown command: /${command}. Type /help for a list.`);
-        rl.prompt();
-        return;
-      }
-
-      try {
-        await entry.handler(args, opts);
-      } catch (err) {
-        output.error(`/${command} failed: ${err.message}`);
-      }
-
-      rl.prompt();
-      return;
-    }
-
-    // --- Non-slash input: AI agent seam (intentionally empty for now) ---
-    // Future: pipe `raw` to the AI agent and stream the response back.
-
     rl.prompt();
   });
 
@@ -248,4 +246,23 @@ export async function startSession() {
   process.on('SIGINT', () => {
     rl.close();
   });
+}
+
+// ---------------------------------------------------------------------------
+// startSession — the public entry point
+// ---------------------------------------------------------------------------
+export async function startSession() {
+  const config = readConfig();
+
+  if (!process.stdout.isTTY) {
+    return startReadlineSession(config);
+  }
+
+  // TTY path: Ink UI
+  // Dynamic imports keep Ink entirely out of the non-TTY code path.
+  const { render } = await import('ink');
+  const React = (await import('react')).default;
+  const { default: App } = await import('../ui/ink/App.jsx');
+
+  render(React.createElement(App, { config }));
 }
