@@ -24,7 +24,8 @@ import {
   SCOPE_GLOBAL,
   SCOPE_LOCAL,
 } from '../services/configStore.js';
-import * as output from '../utils/output.js';
+import * as ui from '../ui/index.js';
+import * as renderer from '../ui/renderer.js';
 
 export async function executeInit(opts) {
   try {
@@ -38,11 +39,35 @@ export async function executeInit(opts) {
       },
       { scope },
     );
-    output.success(`DeCode is configured (${scope}). Run \`decode status\` to verify.`);
+    renderer.render({
+      type: 'success',
+      command: 'decode init',
+      confirmation: `DeCode is configured (${scope}).`,
+      suggestion: 'Run `decode status` to verify your connection.',
+    });
   } catch (err) {
-    output.error(`init failed: ${err.message}`);
+    renderError(err);
     process.exitCode = 1;
   }
+}
+
+/**
+ * Render an error screen with a recovery action back to init/status.
+ */
+function renderError(err) {
+  const error = ui.errorPrompt({
+    type: 'Init failed',
+    explanation: err.message || 'Unable to save the connection configuration.',
+    actions: [
+      { command: 'decode status', description: 'check the current connection state' },
+    ],
+  });
+
+  renderer.render({
+    type: 'error',
+    command: 'decode init',
+    error,
+  });
 }
 
 export function initCommand() {

@@ -210,3 +210,82 @@ New module with:
 ### Verification
 - `npm test` — **22 files, 203 tests, all passing**.
 - `npm run lint` — clean (exit 0).
+
+---
+
+## Task H — Migrate Presentation Layer of Existing Commands to Rendering Engine
+
+**Goal:** Bring `status`, `init`, `api`, `github`, and `doc` onto the same
+rendering engine that `audit.js` already uses, so every command's terminal
+output is composed through `renderer.render()` + UI components instead of
+`output.js` / `console.log` / `chalk` / `ora`.
+
+**Reference implementation:** `src/commands/audit.js` (gold standard —
+uses `renderer.render()` with screen configs).
+
+**Constraint:** `audit.js` stays the standard. Interactive prompts (`inquirer`)
+in `init`/`github`/`doc` are NOT part of this task — only the *output*
+presentation layer moves to the renderer.
+
+**Current state (verified 2026-08-18):**
+- ✅ `audit.js` — migrated (`renderer.render()` screen configs).
+- ❌ `status.js` — `output.printTable` / `success` / `info` / `error`.
+- ❌ `init.js` — `output.success` / `error` (+ `inquirer`).
+- ❌ `api.js` — `ora` + `output.printTable` / `info` / `success` / `error` / `heading` / `dim`.
+- ❌ `github.js` — `ora` + `inquirer` + `output.printBox` / `printTable` / `heading` / `dim` / `success` / `error`.
+- ❌ `doc.js` — `ora` + `inquirer` + `console.log` + `output.printBox` / `dim` / `error` / `success`.
+
+### Subtasks
+
+**Task H.1 — `status.js`** (executeStatus)
+- Replace `output.printTable([...])` with `ui.keyValueList([...])` /
+  `ui.statusRow({...})` driven through `renderer.render()`.
+- Replace `output.success(`Connection looks good.`)` →
+  `renderer.render({ type: 'success', ... })` / `ui.successScreen`.
+- Replace `output.info('Not connected yet...')` → structured status/view.
+- Error path → `renderError(err)` (per `COMMAND_STANDARD.md`).
+
+**Task H.2 — `init.js`** (executeInit)
+- Completion: `output.success(...)` → `ui.successScreen({ command, confirmation, metadata, suggestion })`.
+- Error path: `output.error(...)` → `renderError(err)`.
+- Keep `inquirer` prompts; only the post-save output changes.
+
+**Task H.3 — `api.js`** (executeApiList, executeApiCheck)
+- `api list`: route tables → `ui.table(...)`; framework/scan summary →
+  `ui.statusSummary(...)`.
+- `api check`: results table → `ui.table(...)`; `Diagnosis` section →
+  `ui.statusList(items)`; pass/fail summary → `ui.statusSummary(...)`.
+- Replace `ora` spinner with `renderer`/`ui` motion where appropriate
+  (or keep spinner only for long ops — confirm against COMMAND_STANDARD).
+- JSON/CI paths stay as-is (machine-readable stdout not rendered).
+
+**Task H.4 — `github.js`** (connect, profile, analyze)
+- `connect`: success/error → `successScreen` / `renderError`.
+- `profile`: stats → `ui.statusRow` / `keyValueList`.
+- `analyze`: activity → `ui.activityPulse(...)`; contributors →
+  `ui.contributorTable(...)`; LLM summary → `ui.aiSummary(...)`;
+  quality/commit-hygiene → structured status views (`statusList` / `statusSummary`).
+
+**Task H.5 — `doc.js`** (executeDoc, explainFlow, executeDocCheck)
+- `doc check`: stale/fresh → `ui.statusRow` / `statusSummary` +
+  `successScreen` / `renderError`.
+- `executeDoc`: markdown preview → `ui.panel.docPreview(...)`;
+  success/error → `successScreen` / `renderError`.
+- `explainFlow`: keep plain `console.log(text)`? → convert to
+  `renderer.render({ type: 'panel', ... })` or free-text screen; resolve per
+  COMMAND_STANDARD (no raw `console.log` in commands).
+- `dry-run` preview → `ui.panel.docPreview`.
+
+**Task H.6 — Snapshot regression tests**
+- Add/update `renderer.snapshot()` tests for each migrated command so visuals
+  don't regress (`src/ui/ENGINE.md` §Snapshot System).
+- Run `npm test` + `npm run lint` green before merging.
+
+### Cross-references
+- `src/ui/README.md` — component API (`statusRow`, `statusSummary`,
+  `successScreen`, `errorScreen`, `keyValueList`, `activityPulse`,
+  `contributorTable`, `aiSummary`, `panel.docPreview`, `statusList`, `table`).
+- `src/ui/ENGINE.md` — `renderer.render()` / `renderer.snapshot()`.
+- `COMMAND_STANDARD.md` — error handling, `renderError()`, exit codes.
+- `src/ui/RENDERING_ENGINE_COMPLETE.md` (line 422) — original "Next Phase"
+  note that this Task H fulfills.

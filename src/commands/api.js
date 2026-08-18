@@ -22,6 +22,8 @@ import { API_CHECK_TIMEOUT_MS } from '../constants.js';
 import { checkRoutes, loadSpec } from '../services/apiChecker.js';
 import { isBackendReachable, resolveBackendBaseUrl, scanRoutes } from '../services/routeDetector.js';
 import * as output from '../utils/output.js';
+import * as ui from '../ui/index.js';
+import * as renderer from '../ui/renderer.js';
 
 export function apiCommand() {
   return new Command('api')
@@ -40,31 +42,75 @@ export function executeApiList(opts) {
     }
 
     if (!scan.framework) {
-      output.info('No supported backend framework detected (currently Express).');
+      renderer.render({
+        command: 'decode api list',
+        context: '— route discovery',
+        content: ui.body('No supported backend framework detected (currently Express).'),
+      });
       return;
     }
 
-    output.heading(`Backend framework: ${scan.framework}${scan.cached ? ' (cached — `decode api list --refresh` to rescan)' : ''}`);
     if (scan.routes.length === 0) {
-      output.info('No routes detected. Add some to the source and re-run with `--refresh`.');
+      renderer.render({
+        command: 'decode api list',
+        context: '— route discovery',
+        content: [
+          ui.body(`Backend framework: ${scan.framework}${scan.cached ? ' (cached — rescan with --refresh)' : ''}`),
+          ui.space('normal'),
+          ui.body('No routes detected. Add some to the source and re-run with `--refresh`.'),
+        ].join('\n'),
+      });
       return;
     }
 
-    output.printTable(
-      ['#', 'Method', 'Path', 'Source', 'Flags'],
-      scan.routes.map((r, i) => [
+    const routesTable = ui.table({
+      headers: ['#', 'Method', 'Path', 'Source', 'Flags'],
+      rows: scan.routes.map((r, i) => [
         String(i + 1),
         r.method.toUpperCase(),
         r.path,
         `${r.file}:${r.line}`,
         r.hasParams ? '⚠ has params' : '',
       ]),
-    );
-    output.dim(`${plural(scan.routes.length, 'route')} detected — run \`decode api check\` to test them.`);
+    });
+
+    const content = [
+      ui.body(`Backend framework: ${scan.framework}${scan.cached ? ' (cached — rescan with --refresh)' : ''}`),
+      ui.space('normal'),
+      routesTable,
+      ui.space('normal'),
+      ui.metadata(`${plural(scan.routes.length, 'route')} detected — run \`decode api check\` to test them.`),
+    ].join('\n');
+
+    renderer.render({
+      command: 'decode api list',
+      context: '— route discovery',
+      content,
+      actions: ui.hint('decode api check', 'test the detected routes against a live server'),
+    });
   } catch (err) {
-    output.error(`api list failed: ${err.message}`);
-    process.exitCode = 1;
+    renderError(err, 'decode api list');
   }
+}
+
+/**
+ * Render an error screen with a recovery action back to api list/check.
+ * Mirrors the gold-standard pattern in audit.js / init.js / status.js.
+ */
+function renderError(err, command = 'decode api') {
+  const error = ui.errorPrompt({
+    type: 'API check failed',
+    explanation: err.message || 'Unable to discover or check the backend routes.',
+    actions: [
+      { command: 'decode api list', description: 'rediscover routes from the source' },
+    ],
+  });
+  renderer.render({
+    type: 'error',
+    command,
+    error,
+  });
+  process.exitCode = 1;
 }
 
 function apiListCommand() {
@@ -84,20 +130,20 @@ export async function executeApiCheck(pathFilters, opts) {
     );
 
     if (selected.length === 0) {
-      output.error(`No API routes detected${filters.length ? ` matching "${pathFilters.join(', ')}"` : ''}. Run \`decode api list\` first.`);
+      renderError(new Error(`No API routes detected${filters.length ? ` matching "${pathFilters.join(', ')}"` : ''}. Run \`decode api list\` first.`), 'decode api check');
       process.exitCode = 1;
       return;
     }
 
     const base = await resolveBackendBaseUrl({ baseUrl: opts.baseUrl });
     if (!base) {
-      output.error('Could not determine the backend base URL. Set PORT in your .env or pass --base-url <url>.');
+      renderError(new Error('Could not determine the backend base URL. Set PORT in your .env or pass --base-url <url>.'), 'decode api check');
       process.exitCode = 1;
       return;
     }
 
     if (!(await isBackendReachable(base))) {
-      output.error(`Backend not reachable at ${base} — is it running?`);
+      renderError(new Error(`Backend not reachable at ${base} — is it running?`), 'decode api check');
       process.exitCode = 1;
       return;
     }
