@@ -51,6 +51,6 @@ describe('decode connect / disconnect', () => {
     status = await run(['status']);
     expect(status.exitCode).toBe(0);
     expect(status.stdout.toLowerCase()).toContain('no');
-    expect(status.stdout.toLowerCase()).toContain('not connected');
+    expect(status.stdout.toLowerCase()).toContain('not configured');
   });
 });
