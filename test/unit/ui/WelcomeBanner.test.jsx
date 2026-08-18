@@ -7,11 +7,11 @@ const configuredConfig = { llm: { provider: 'claude' } };
 const freshConfig = { llm: { provider: null } };
 
 describe('WelcomeBanner', () => {
-  it('renders the /›‹ logo mark', () => {
+  it('renders figlet logo art for /›‹', () => {
     const { lastFrame } = render(
       <WelcomeBanner config={configuredConfig} cwd="/home/user/my-project" />
     );
-    expect(lastFrame()).toContain('/><');
+    expect(lastFrame()).toContain('██╗');
   });
 
   it('renders DeCode name and tagline', () => {
