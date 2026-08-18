@@ -14,7 +14,7 @@ export const WHATS_NEW = [
 export default function WelcomeBanner({ config, cwd }) {
   const isFirstRun = config.llm?.provider === null || config.llm?.provider === undefined;
   const provider = config.llm?.provider ?? '—';
-  const promptArt = figlet.textSync('/><', { font: 'ansi_shadow' });
+  const promptArt = figlet.textSync('/><', { font: 'ANSI Shadow' });
 
   return (
     <Box borderStyle="round" flexDirection="row" paddingX={1}>
