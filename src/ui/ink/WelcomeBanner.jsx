@@ -1,4 +1,5 @@
 import React from 'react';
+import figlet from 'figlet';
 import { Box, Text } from 'ink';
 
 export const TIPS = [
@@ -13,12 +14,13 @@ export const WHATS_NEW = [
 export default function WelcomeBanner({ config, cwd }) {
   const isFirstRun = config.llm?.provider === null || config.llm?.provider === undefined;
   const provider = config.llm?.provider ?? '—';
+  const promptArt = figlet.textSync('/><', { font: 'ansi_shadow' });
 
   return (
     <Box borderStyle="round" flexDirection="row" paddingX={1}>
       {/* Left column */}
       <Box flexDirection="column" marginRight={2} minWidth={24}>
-        <Text bold>/&gt;&lt;</Text>
+        <Text>{promptArt}</Text>
         <Text bold>DeCode</Text>
         <Text dimColor>Your Project, Decoded.</Text>
         <Text> </Text>
