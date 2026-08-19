@@ -9,13 +9,16 @@
   },
   "files": [
     "bin",
-    "src"
+    "dist",
+    "decode.config.example.json"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
+    "build": "esbuild src/index.js --bundle --platform=node --format=esm --outfile=dist/index.js --packages=external --splitting=false --jsx=automatic --jsx-import-source=react --log-level=warning",
     "dev": "tsx bin/decode.js",
+    "prepublishOnly": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -31,14 +34,14 @@
     "ink-text-input": "^6.0.0",
     "inquirer": "^9.2.23",
     "octokit": "^3.1.0",
-    "ora": "^8.1.0",
-    "tsx": "^4.23.12"
+    "ora": "^8.1.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^5.1.4",
     "eslint": "^8.57.0",
     "execa": "^8.0.1",
     "ink-testing-library": "^4.0.0",
+    "tsx": "^4.23.12",
     "vitest": "^3.2.7"
   }
 }

@@ -9,7 +9,7 @@
     "sourceType": "module"
   },
   "extends": ["eslint:recommended"],
-  "ignorePatterns": ["node_modules/", "docs/", "coverage/", ".remember/", ".claude/"],
+  "ignorePatterns": ["node_modules/", "docs/", "coverage/", ".remember/", ".claude/", "dist/"],
   "rules": {
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }]
   }

@@ -17,6 +17,7 @@ Run it once for a snapshot (`decode audit`), or drop into the interactive sessio
 git clone https://github.com/s8tn2546/decode-cli/
 cd decode-cli
 npm install
+npm run build    # compile src/ → dist/ (required before linking)
 sudo npm link   # makes the `decode` command available globally
 ```
 
@@ -101,10 +102,14 @@ See [`AGENTS_AND_SKILLS.md`](./AGENTS_AND_SKILLS.md) for the custom agent and sk
 ## Development
 
 ```bash
-npm run dev      # run the CLI
+npm install
+npm run dev      # run the CLI against source via tsx (fast local iteration)
 npm test         # run the test suite
 npm run lint     # lint the codebase
+npm run build    # compile src/ → dist/ via esbuild (run before npm link or publish)
 ```
+
+**Build vs. dev:** `npm run dev` runs the CLI directly from TypeScript source using `tsx` — this is fast and doesn't require a build step. The published/linked `decode` command (`npm link` or `npm install -g`) runs the compiled bundle in `dist/` instead, so `npm run build` must be run once before linking or publishing. The `prepublishOnly` script handles this automatically for `npm publish`.
 
 DeCode is a CLI, not a web app, so it ships no Playwright browser tests. Unit tests (`vitest`) plus execa-driven CLI integration tests exercise the real shipped binary end-to-end instead — the same gate a browser harness would provide, minus the browser. See [`ARCHITECTURE.md`](./ARCHITECTURE.md#testing-strategy).
 

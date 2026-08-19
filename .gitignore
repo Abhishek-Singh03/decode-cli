@@ -2,6 +2,7 @@ node_modules/
 .env
 *.log
 .decode/
+dist/
 # Local project runtime state — never commit; the template lives in
 # decode.config.example.json (routes are auto-detected, not stored here).
 decode.config.json

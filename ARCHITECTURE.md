@@ -5,6 +5,7 @@ DeCode (`decode-cli`) is a Node.js CLI that gives developers core capabilities f
 
 ## Stack
 - **Runtime:** Node.js (>=18)
+- **Build:** esbuild bundles `src/` → `dist/index.js` (ESM, JSX→JS, all runtime deps external). The published `bin/decode.js` imports the compiled bundle; `tsx` is dev-only and used only by `npm run dev` for local iteration.
 - **CLI framework:** `commander` (argument parsing + `.showSuggestionAfterError()` for near-miss subcommands)
 - **Terminal output:** `chalk` (color), `cli-table3` (tables), `ora` (spinners), `boxen` (summary panels), `inquirer` (interactive prompts)
 - **Rendering engine (`src/ui/`):** a composable screen-rendering layer (renderer → components → theme) used by the `audit` command and the custom landing screen. See [`src/ui/README.md`](src/ui/README.md), [`src/ui/ENGINE.md`](src/ui/ENGINE.md), and the full build report [`src/ui/RENDERING_ENGINE_COMPLETE.md`](src/ui/RENDERING_ENGINE_COMPLETE.md).
@@ -64,8 +65,10 @@ Rendering Engine (src/ui/) — used by audit + landing screen
 
 ```
 decode-cli/
-├── .github/workflows/ci.yml         # CI: install → lint → test (Node 22)
-├── bin/decode.js                    # CLI entry point ("bin" in package.json)
+├── .github/workflows/ci.yml         # CI: install → build → lint → test (Node 22)
+├── bin/decode.js                    # CLI entry point — thin wrapper that imports dist/
+├── dist/                            # esbuild output (gitignored, built before publish)
+│   └── index.js                     # single bundled ESM file — all src/ inlined
 ├── src/
 │   ├── index.js                    # app bootstrap: registers commands; no-arg → startSession()
 │   ├── constants.js                # CLI identity, timeouts, exit codes
