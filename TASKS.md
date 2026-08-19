@@ -289,3 +289,30 @@ presentation layer moves to the renderer.
 - `COMMAND_STANDARD.md` — error handling, `renderError()`, exit codes.
 - `src/ui/RENDERING_ENGINE_COMPLETE.md` (line 422) — original "Next Phase"
   note that this Task H fulfills.
+
+---
+
+## Task I — De-pollute the test suite (2026-08-19)
+
+**Problem:** `npx vitest run` (and even a single-file path like
+`test/integration/api.test.js`) recursed into the two parallel git worktrees
+nested inside the repo (`.claude/worktrees/ink-session-ui`,
+`.worktrees/ink-session-ui`) and ran duplicate copies of same-named test files —
+a request for one file reported 3 files / 30 tests. The repo's own
+`run-tests` skill had worked around this with `grep -v worktrees` and listed 5
+"known pre-existing" failures that were, in fact, 100% worktree pollution.
+
+**Fix (config, not shell):**
+- `vitest.config.js` — added `exclude` extending `defaultExclude` with
+  `**/.claude/**` and `**/.worktrees/**` so the worktree copies are never
+  collected; added `setupFiles: ['./test/setup.js']` so the `~/.decode` hermetic
+  guard actually loads (it was previously dead code).
+- Updated `.claude/skills/run-tests/SKILL.md` — now a clean `npx vitest run`;
+  dropped the `grep -v worktrees` workaround and the phantom-failure list.
+- Updated `CHANGELOG.md` [Unreleased] with the fix note.
+
+**Final verification:**
+- `npx vitest run` — **25 files, 217 tests, all passing** (0 failures).
+- Single-file run reports exactly what was asked (e.g. `api.test.js` → 1 file /
+  10 tests, not 3 / 30). The 5 previously-listed "known" failures do not
+  reproduce once the worktrees are excluded.

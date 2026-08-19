@@ -3,7 +3,17 @@
 All notable changes to DeCode will be documented in this file.
 
 ## [Unreleased]
-- (No unreleased changes yet.)
+
+### Fixed
+- **Test suite pollution from nested worktrees** — `vitest.config.js` now sets
+  `exclude` (extending `defaultExclude` with `**/.claude/**` and `**/.worktrees/**
+  ) so Vitest stops recursing into the two parallel git worktrees nested inside
+  the repo (`.claude/worktrees/ink-session-ui`, `.worktrees/ink-session-ui`) and
+  running duplicate copies of same-named test files. It also now loads
+  `setupFiles: ['./test/setup.js']`, which points `DECODE_GLOBAL_CONFIG_DIR` at a
+  temp dir so tests never read the real `~/.decode` (this guard was previously
+  dead code — the config didn't reference it). After the fix, `npm test` runs the
+  main repo only: **25 files, 217 tests, all passing**.
 
 ## [0.1.0] - 2026-08-08
 
