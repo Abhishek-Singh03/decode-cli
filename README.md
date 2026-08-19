@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 
-DeCode watches your project the way a good senior engineer would: it knows when your API routes are broken, when your docs have drifted from your code, and what your recent commits actually say about the health of the codebase — all from one CLI, with zero context-switching to a dashboard.
+Decode watches your project the way a good senior engineer would: it knows when your API routes are broken, when your docs have drifted from your code, and what your recent commits actually say about the health of the codebase — all from one CLI, with zero context-switching to a dashboard.
 
 Run it once for a snapshot (`decode audit`), or drop into the interactive session and keep it open the whole time you're working.
 
