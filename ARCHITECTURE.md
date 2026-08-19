@@ -128,6 +128,7 @@ Key design decisions:
 - **Unit tests** cover command parsing, API check logic, route detection, GitHub data transforms, commit-health heuristics, and config read/write / two-tier merge.
 - **Integration tests** run the real CLI binary as a subprocess (via `execa`) and assert on stdout/exit codes per command, using hermetic local servers (fake GitHub/LLM/backend) so CI never needs network access.
 - **No browser → no Playwright.** DeCode is a CLI, not a web app, so a browser-automation harness would test nothing that exists. Unit (`vitest`) plus execa-driven CLI integration tests fill the equivalent role: they exercise the actual shipped executable end-to-end and gate CI, which is the purpose a browser test would otherwise serve.
+- **Hermetic, worktree-safe runs.** `test/setup.js` points `DECODE_GLOBAL_CONFIG_DIR` at a temp dir so tests never touch the real `~/.decode`. `vitest.config.js` excludes the two parallel git worktrees nested in this repo (`.claude/worktrees/`, `.worktrees/`) so the suite runs the main repo only — a bare `npx vitest run` is a clean single command (25 files / 217 tests, no filtering needed).
 
 ## CI/CD
 GitHub Actions workflow runs on every push: install → lint → unit tests → integration tests. Must be green on the latest commit at submission time.

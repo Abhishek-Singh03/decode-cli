@@ -94,6 +94,11 @@ npm run lint     # lint the codebase
 DeCode is a CLI, not a web app, so it ships no Playwright browser tests. Unittest cases (`vitest`) plus execa-driven CLI integration tests exercise the real shipped binary end-to-end instead — the same gate a browser harness would provide, minus the browser. See
 [`ARCHITECTURE.md`](./ARCHITECTURE.md#testing-strategy).
 
+Tests run hermetically: `test/setup.js` isolates them from your real `~/.decode`
+config, and `vitest.config.js` excludes the nested git worktrees, so a plain
+`npm test` covers the main repo only (25 files, 217 tests) — no extra flags
+needed. See [`ARCHITECTURE.md` Testing Strategy](./ARCHITECTURE.md#testing-strategy).
+
 ## License
 
 MIT
